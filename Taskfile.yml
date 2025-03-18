@@ -421,6 +421,12 @@ tasks:
   memcached-parse-reports: {cmds: [task parse-app       -- memcached-1.6.17]}
 
   ################################
+  #### toy-app
+  toy-build:         {cmds: [task app-build       -- toy]}
+  toy-test:          {cmds: [task app-test        -- toy]}
+  toy-eval:          {cmds: [task app-eval        -- toy]}
+
+  ################################
   #### All apps
 
   apps-stop:
