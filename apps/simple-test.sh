@@ -14,22 +14,27 @@ cd ${APP}
 
 echo "Starting ${APP}"
 RUN_EINSTEIN=1 USE_LOG_DIR=1 V=1 LOG_SUB_DIR=einstein-simple ./serverctl restart ${ARGS}
+echo "[WAIT] 8s"
 sleep 8
 
 echo "Sending 'taintall' command..."
 ./serverctl udscmd pids dbt taintall
+echo "[WAIT] 2s"
 sleep 2
 
 echo "Handling test request"
 ./clientctl run
+echo "[WAIT] 2s"
 sleep 2
 
 echo "Sending 'taintall' command x2..."
 ./serverctl udscmd pids dbt taintall
+echo "[WAIT] 2s"
 sleep 2
 
 echo "Handling test request x2"
 ./clientctl run
+echo "[WAIT] 2s"
 sleep 2
 
 echo "Stopping ${APP}"
