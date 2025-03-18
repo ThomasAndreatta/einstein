@@ -1,0 +1,42 @@
+#!/bin/bash
+
+MYPWD=`pwd`
+ROOT=${ROOT-../..}
+. ${ROOT}/apps/scripts/include/build.inst.inc
+
+PROG=server
+CLIENT=client
+INPUT=./${PROG}
+OUTPUT=install/bin/${PROG}
+CLIENT_OUTPUT=install/bin/${CLIENT}
+LINKER="$CC"
+
+# Clean previous build
+make clean
+rm -rf install/*
+
+# Create install directories
+mkdir -p install/bin
+
+# Build the application
+make
+
+# Copy binaries to install directory
+mkdir -p install/bin
+cp ${PROG} install/bin/
+cp ${CLIENT} install/bin/
+cp serverctl install/bin/
+cp clientctl install/bin/
+chmod +x install/bin/serverctl
+chmod +x install/bin/clientctl
+
+# Create data directory
+mkdir -p /tmp/data
+
+# If libdft is available, relink the binaries
+if [ $HAVE_LIBDFT -eq 1 ]; then
+    ${LIBDFT}/utils/relink.py install/bin/${PROG}
+    ${LIBDFT}/utils/relink.py install/bin/${CLIENT}
+fi
+
+echo "Build completed successfully"

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+BIN_PATH=`pwd`/install/bin/client
+
+$BIN_PATH EXECUTE /bin/ls /tmp/
+

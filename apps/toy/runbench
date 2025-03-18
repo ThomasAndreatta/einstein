@@ -1,0 +1,15 @@
+#!/bin/bash
+
+
+ROOT=`readlink -f ../..`
+
+BENCH_TYPE=${BENCH_TYPE:-1}
+
+. ../scripts/include/cmdctl.inc
+
+# Main bench type is 2
+
+if [ $BENCH_TYPE -eq 2 ]; then
+    echo "Running benchmarks..."
+    exit 0
+fi
