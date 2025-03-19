@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BIN_PATH=`pwd`/install/bin/client
+BIN_PATH=`which nc`
 
 . ../scripts/include/cmdctl.inc
 

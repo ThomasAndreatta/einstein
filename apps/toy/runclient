@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BIN_PATH=`pwd`/install/bin/client
+BIN_PATH=`which nc`
 
-$BIN_PATH EXECUTE /bin/ls /tmp/
+echo "EXECUTE /bin/ls /home" | $BIN_PATH 127.0.0.1 8080
 
