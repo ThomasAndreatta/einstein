@@ -2,9 +2,6 @@
 
 PROC_NAME="server"
 BIN_PATH=`pwd`/install/bin/server
-PID_FILE="/tmp/server.pid"
-SERVER_BIN="./server"
-LOG_FILE="/tmp/server_control.log"
 
 ROOT=${ROOT-../..}
 
