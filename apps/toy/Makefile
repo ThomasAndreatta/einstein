@@ -1,18 +1,19 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -fPIC -g
-LDFLAGS = 
+CFLAGS = -Wall -Wextra -fPIC -g -fPIE
+LDFLAGS = -pthread
 
 SERVER = server
 SERVER_SRC = server.c
 
-all: $(SERVER) $(CLIENT)
+all: $(SERVER)
 
 $(SERVER): $(SERVER_SRC)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
 	rm -f $(SERVER)
+	rm -rf install/*
 	rm -f *.o
 
 setup:
