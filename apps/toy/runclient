@@ -2,5 +2,6 @@
 
 BIN_PATH=`which nc`
 
-echo "EXECUTE /bin/ls /home" | $BIN_PATH 127.0.0.1 8080
+echo "PArams: $@"
+echo "EXECUTE echo" | $BIN_PATH 127.0.0.1 8080
 
