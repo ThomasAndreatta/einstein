@@ -4,7 +4,7 @@ set -e
 
 MYPWD=`pwd`
 
-. ${ROOT}/apps/scripts/include/build.inst.inc
+. ${MYPWD}/../scripts/include/build.inst.inc
 
 PROG=server
 INPUT=./${PROG}

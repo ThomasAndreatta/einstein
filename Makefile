@@ -496,7 +496,7 @@ apps-stop:
 	cd apps && ./stop-all-servers.sh
 
 apps-build:
-	time ( $(MAKE) nginx-build lighttpd-build apache-build postgres-build redis-build memcached-build )
+	$(MAKE) nginx-build lighttpd-build apache-build postgres-build redis-build memcached-build
 
 apps-test:
 	$(MAKE) nginx-test lighttpd-test apache-test postgres-test redis-test memcached-test
