@@ -16,7 +16,7 @@
 // Default port (can be overridden with -p flag)
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
-#define UDS
+#define UDS_
 
 
 // Global variables for cleanup

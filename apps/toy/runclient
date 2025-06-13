@@ -1,7 +1,3 @@
 #!/bin/bash
 
-BIN_PATH=`which nc`
-
-echo "PArams: $@"
-echo "EXECUTE echo" | $BIN_PATH 127.0.0.1 8080
-
+echo "EXECUTE echo" | nc 127.0.0.1 8080

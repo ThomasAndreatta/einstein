@@ -7,23 +7,16 @@ MYPWD=`pwd`
 . ${MYPWD}/../scripts/include/build.inst.inc
 
 PROG=server
-INPUT=./${PROG}
 OUTPUT=install/bin/${PROG}
-LINKER="$CC"
-
-
 
 make clean
 mkdir -p install/bin
 make
 
-cp ${PROG} install/bin/
-
 mkdir -p /tmp/data
 
 if [ $HAVE_LIBDFT -eq 1 ]; then
-    ${LIBDFT}/utils/relink.py install/bin/${PROG}
-    ${LIBDFT}/utils/relink.py ${PROG}
+    ${LIBDFT}/utils/relink.py ${OUTPUT}
 fi
 
 echo "Build completed successfully"

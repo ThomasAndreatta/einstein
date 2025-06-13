@@ -1,5 +1,7 @@
-sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b  /bin/
+sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b  /bin
 update-rc.d postgresql enable
 
-sleep 10
+apt-get install apt-get install postgresql postgresql-contrib
+
 service postgresql start
+sleep 5

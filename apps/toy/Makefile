@@ -1,7 +1,7 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -fPIC -g -fPIE
-LDFLAGS = -pthread
+CFLAGS = -Wall -Wextra -g -fPIC
+LDFLAGS = -pie -Wl,-pie -pthread
 
 SERVER = server
 SERVER_SRC = server.c
@@ -9,8 +9,11 @@ SERVER_SRC = server.c
 all: $(SERVER)
 
 $(SERVER): $(SERVER_SRC)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+	mkdir -p ./install/bin
+	mv server ./install/bin
+	@file ./install/bin/server
+	
 clean:
 	rm -f $(SERVER)
 	rm -rf install/*
