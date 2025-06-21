@@ -84,13 +84,16 @@ void execute_echo() {
         }
 
         // Redirect stdout to the file
-        dup2(fd, STDOUT_FILENO);
-        close(fd);
-
+        
+// 0x7fff00103016
         // Execute echo
         args[0] = cmd_echo;
         args[1] = "touch /tmp/attacker-was-here";
         args[2] = NULL;
+        printf("Address of cmd_echo: %p | in einstein 0x7fff00103016\n", (void*)cmd_echo);
+        printf("Address of args: %p\n", (void*)args);
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
         execve(cmd_echo, args, NULL);
 
         perror("execve failed");
@@ -126,6 +129,7 @@ void handle_client(int client_socket, int is_uds) {
     }
     
     buffer[bytes_received] = '\0';
+        printf("Address of %s function: %p\n",__func__ , (void *)handle_client);
 
     if (is_uds) {
         printf("Received UDS command: %s\n", buffer);

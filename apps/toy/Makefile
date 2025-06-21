@@ -12,7 +12,6 @@ $(SERVER): $(SERVER_SRC)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 	mkdir -p ./install/bin
 	mv server ./install/bin
-	@file ./install/bin/server
 	
 clean:
 	rm -f $(SERVER)
