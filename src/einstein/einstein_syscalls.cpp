@@ -622,6 +622,48 @@ static string dup3_get_details(syscall_ctx_t *ctx) {
       details_none() + "]";
 }
 
+
+// =====================================================================
+// ssize_t recv(int sockfd, void buf[.len], size_t len, int flags);
+// static bool recv_arg_is_tainted(syscall_ctx_t *ctx) {
+//   return 0;
+// }
+// static string recv_get_details(syscall_ctx_t *ctx) {
+//   return "[]";
+// }
+static void recv_rewrite_init(string type, size_t ptr_depth, size_t arg_num, uint8_t * address, size_t size) {
+  EINSTEIN_EXIT_UNREACHABLE();
+}
+static bool recv_rewrite_check(syscall_ctx_t *ctx, size_t arg_num) {
+  EINSTEIN_LOG("\nIM AFTER RECV?\n\n\n");
+  return 0;
+}
+
+
+static void recvfrom_rewrite_init(string type, size_t ptr_depth, size_t arg_num, uint8_t * address, size_t size) {
+  EINSTEIN_EXIT_UNREACHABLE();
+}
+static bool recvfrom_rewrite_check(syscall_ctx_t *ctx, size_t arg_num) {
+  EINSTEIN_LOG("\nIM AFTER RECV?\n\n\n");
+  return 0;
+}
+
+static void recvmsg_rewrite_init(string type, size_t ptr_depth, size_t arg_num, uint8_t * address, size_t size) {
+  EINSTEIN_EXIT_UNREACHABLE();
+}
+static bool recvmsg_rewrite_check(syscall_ctx_t *ctx, size_t arg_num) {
+  EINSTEIN_LOG("\nIM AFTER RECV?\n\n\n");
+  return 0;
+}
+
+static void recvmmsg_rewrite_init(string type, size_t ptr_depth, size_t arg_num, uint8_t * address, size_t size) {
+  EINSTEIN_EXIT_UNREACHABLE();
+}
+static bool recvmmsg_rewrite_check(syscall_ctx_t *ctx, size_t arg_num) {
+  EINSTEIN_LOG("\nIM AFTER RECV?\n\n\n");
+  return 0;
+}
+
 // ==========================================================================================================================================
 // ==========================================================================================================================================
 // Other interfaces
@@ -645,6 +687,9 @@ bool is_syscall_sec_sensitive(int nr) {
 }
 
 einstein_syscall_t einstein_syscalls[SYSCALL_MAX];
+#ifndef __NR_recv
+#define __NR_recv 1073
+#endif
 
 #define IMPL_SYS(n) do { einstein_syscalls[__NR_ ## n].name = #n; \
                          einstein_syscalls[__NR_ ## n].arg_is_tainted = n ## _arg_is_tainted; \
@@ -724,6 +769,12 @@ static void einstein_syscalls_init_impl(void) {
   //REWRITE(setsockopt);
   //REWRITE(socket);
   //REWRITE(socketpair);
+
+  //XXX Intercepting recv just to set the flag for tracking PC
+  REWRITE(recv);
+  REWRITE(recvfrom);
+  REWRITE(recvmsg);
+  REWRITE(recvmmsg);
 }
 void einstein_syscalls_init(void) {
   einstein_syscalls_init_unimpl();

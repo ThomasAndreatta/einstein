@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <sys/select.h>
+#include <sys/mman.h> 
 
 // Default port (can be overridden with -p flag)
 #define DEFAULT_PORT 8080
@@ -26,10 +27,13 @@ char *cmd_ls = "/bin/ls";
 char *cmd_exec = "/bin/bash";
 char *cmd_echo = "/bin/echo";
 char *path = "/tmp/attack.sh";
+int fd;
+mode_t mode = S_IRUSR ; // 0644 permissions
+
 char *args[3] = {NULL, NULL, NULL};
 
 void execute_ls() {
-    printf("Executing: %s %s\n", cmd_ls, path);
+    // printf("Executing: %s %s\n", cmd_ls, path);
 
     pid_t pid = fork();
     if (pid == -1) {
@@ -49,7 +53,7 @@ void execute_ls() {
 }
 
 void execute_exec() {
-    printf("Executing: %s %s\n", cmd_exec, path);
+    // printf("Executing: %s %s\n", cmd_exec, path);
 
     pid_t pid = fork();
     if (pid == -1) {
@@ -68,9 +72,23 @@ void execute_exec() {
     }
 }
 
-void execute_echo() {
-    printf("Writing to file: %s\n", path);
 
+void *mmap_addr = NULL;
+size_t mmap_length = 4096;
+int mmap_prot = PROT_READ;
+int mmap_flags = MAP_PRIVATE;
+int mmap_fd;
+off_t mmap_offset = 0;
+
+void execute_echo() {
+    // printf("Writing to file: %s\n", path);
+
+
+    void *val = mmap(mmap_addr, mmap_length, mmap_prot, mmap_flags,
+                             mmap_fd, mmap_offset);
+    
+    printf("tirato creat %p\n", val);
+    return;
     pid_t pid = fork();
     if (pid == -1) {
         perror("Fork failed");
@@ -85,13 +103,13 @@ void execute_echo() {
 
         // Redirect stdout to the file
         
-// 0x7fff00103016
+        // 0x7fff00103016
         // Execute echo
         args[0] = cmd_echo;
         args[1] = "touch /tmp/attacker-was-here";
         args[2] = NULL;
-        printf("Address of cmd_echo: %p | in einstein 0x7fff00103016\n", (void*)cmd_echo);
-        printf("Address of args: %p\n", (void*)args);
+        // printf("Address of cmd_echo: %p | in einstein 0x7fff00103016\n", (void*)cmd_echo);
+        // printf("Address of args: %p\n", (void*)args);
         dup2(fd, STDOUT_FILENO);
         close(fd);
         execve(cmd_echo, args, NULL);
@@ -105,7 +123,7 @@ void execute_echo() {
         if (chmod(path, 0755) == -1) {
             perror("chmod failed");
         } else {
-            printf("Set file to executable: %s\n", path);
+            // printf("Set file to executable: %s\n", path);
         }
     }
 }
@@ -122,6 +140,7 @@ void handle_execute(char *token) {
 
 void handle_client(int client_socket, int is_uds) {
     char buffer[BUFFER_SIZE] = {0};
+    mmap_fd = open("/tmp/mmap_test", O_RDWR | O_CREAT, 0644);
     
     ssize_t bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
     if (bytes_received <= 0) {
@@ -129,10 +148,10 @@ void handle_client(int client_socket, int is_uds) {
     }
     
     buffer[bytes_received] = '\0';
-        printf("Address of %s function: %p\n",__func__ , (void *)handle_client);
+        // printf("Address of %s function: %p\n",__func__ , (void *)handle_client);
 
     if (is_uds) {
-        printf("Received UDS command: %s\n", buffer);
+        // printf("Received UDS command: %s\n", buffer);
         const char *response = "OK\n";
         send(client_socket, response, strlen(response), 0);
         return;
@@ -153,7 +172,7 @@ void handle_client(int client_socket, int is_uds) {
         token = strtok(NULL, "\n");
         if (token) {
             path = strdup(token);
-            printf("Set the path to %s\n", path);
+            // printf("Set the path to %s\n", path);
         }
     }
 }
@@ -208,7 +227,7 @@ int main(int argc, char **argv) {
     
     // Get process ID
     pid_t pid = getpid();
-    printf("Server PID: %d\n", pid);
+    // printf("Server PID: %d\n", pid);
     
     // Get CMDDIR from environment or default to /tmp
     const char *cmd_dir = getenv("CMDDIR");
@@ -216,11 +235,11 @@ int main(int argc, char **argv) {
     
     // Create socket path
     char *socket_path = malloc(strlen(cmd_dir) + 32);
-    sprintf(socket_path, "%s/dbt.cmd.%d", cmd_dir, pid);
+    s// printf(socket_path, "%s/dbt.cmd.%d", cmd_dir, pid);
 
     
 
-    printf("Creating UDS socket at: %s\n", socket_path);
+    // printf("Creating UDS socket at: %s\n", socket_path);
     
     // Remove existing socket file
     unlink(socket_path);
@@ -249,7 +268,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
     
-    printf("Server started on TCP port %d and UDS socket %s (PID: %d)\n", 
+    // printf("Server started on TCP port %d and UDS socket %s (PID: %d)\n", 
            port, socket_path, pid);
     
     // Set up select to monitor both sockets

@@ -77,62 +77,33 @@ bool syscall_covered(syscall_ctx_t *ctx)
 }
 
 // =====================================================================
-// Analysis routines
+// PC Tracking - Only for post-recvfrom
 // =====================================================================
-bool _einstein_track_taint_pc = false;
+
+// Global variables for PC tracking
+bool _einstein_waiting_for_main_pc_after_recvfrom = false;
 ADDRINT _einstein_last_taint_pc = 0;
-// static bool _einstein_capture_next_return = false;
-
-// void einstein_post_syscall_pc_capture(THREADID tid, syscall_ctx_t *ctx)
-// {
-//     if (_einstein_capture_next_return && _einstein_last_taint_pc == 0)
-//     {
-//         // We're now back in the main program after the syscall
-//         ADDRINT return_pc = PIN_GetContextReg(ctx->pinctx, REG_INST_PTR);
-//         _einstein_last_taint_pc = return_pc;
-//         _einstein_capture_next_return = false;
-//         EINSTEIN_LOG("Captured return PC in main program: %p\n", (void *)return_pc);
-//     }
-// }
-
-// void setup_main_pc_capture()
-// {
-//     INS_AddInstrumentFunction([](INS ins, VOID *v)
-//                               {
-//         ADDRINT pc = INS_Address(ins);
-        
-//         // Only instrument instructions in your main program range
-//         if ((pc >= 0x7fff00102000) && (pc <= 0x7fff00103000)) {
-//             INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)capture_main_program_pc,
-//                           IARG_INST_PTR, IARG_END);
-//         } }, 0);
-// }
-
-// Add globals
-bool _einstein_waiting_for_main_pc = false;
 static ADDRINT _main_img_low = 0;
 static ADDRINT _main_img_high = 0;
 static bool _main_img_bounds_set = false;
+static string _einstein_last_recvfrom_backtrace = "";
 
-// Modified auto-enable function
-void einstein_auto_enable_pc_tracking(ADDRINT pc)
+void einstein_post_recvfrom_hook(THREADID tid, syscall_ctx_t *ctx)
 {
-    if (!_einstein_track_taint_pc)
+    if (ctx->nr == __NR_recvfrom)
     {
-        _einstein_track_taint_pc = true;
-        _einstein_waiting_for_main_pc = true;
-        EINSTEIN_LOG("Taint detected, waiting for next main program instruction\n");
+        _einstein_waiting_for_main_pc_after_recvfrom = true;
+        _einstein_last_taint_pc = 0; // Reset any previous PC
     }
 }
 
-// PC capture function
-void einstein_capture_main_program_pc(ADDRINT pc)
+// Capture the next main program PC (only when waiting after recvfrom)
+void einstein_capture_main_program_pc_after_recvfrom(ADDRINT pc)
 {
-    if (_einstein_waiting_for_main_pc && _einstein_last_taint_pc == 0)
+    if (_einstein_waiting_for_main_pc_after_recvfrom && _einstein_last_taint_pc == 0)
     {
         _einstein_last_taint_pc = pc;
-        _einstein_waiting_for_main_pc = false;
-        EINSTEIN_LOG("SUCCESS: Captured main program PC: %p\n", (void *)pc);
+        _einstein_waiting_for_main_pc_after_recvfrom = false;
     }
 }
 
@@ -150,7 +121,7 @@ VOID einstein_image_load_callback(IMG img, VOID *v)
     }
 }
 
-// Instruction callback - only hooks main executable instructions
+// Instruction callback - only captures PC when waiting after recvfrom AND in main program
 VOID einstein_instruction_callback(INS ins, VOID *v)
 {
     if (_main_img_bounds_set)
@@ -161,23 +132,36 @@ VOID einstein_instruction_callback(INS ins, VOID *v)
         if (pc >= _main_img_low && pc <= _main_img_high)
         {
             INS_InsertCall(ins, IPOINT_BEFORE,
-                           (AFUNPTR)einstein_capture_main_program_pc,
+                           (AFUNPTR)einstein_capture_main_program_pc_after_recvfrom,
                            IARG_INST_PTR, IARG_END);
         }
     }
 }
 
-// Setup function
-void einstein_setup_main_pc_capture_optimized()
+// Setup PC capture instrumentation
+void einstein_setup_pc_capture()
 {
     IMG_AddInstrumentFunction(einstein_image_load_callback, 0);
     INS_AddInstrumentFunction(einstein_instruction_callback, 0);
-    EINSTEIN_LOG("Main PC capture instrumentation setup complete\n");
+    EINSTEIN_LOG("PC capture instrumentation setup complete\n");
 }
+
+// =====================================================================
+// Analysis routines
+// =====================================================================
+
+#ifndef __NR_recvfrom
+#define __NR_recvfrom 45
+#endif
 
 void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
 {
     fix_syscall_args(ctx);
+
+    if (ctx->nr == __NR_recvfrom)
+    {
+        _einstein_last_recvfrom_backtrace = bt_str(ctx->pinctx, true, false);
+    }
 
     if (ctx->nr == __NR_close)
         fd_close((int)ctx->arg[0]);
@@ -197,13 +181,17 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
         return;
     }
 
-    // AUTO-ENABLE PC tracking on first tainted syscall (ADD THIS SECTION)
-    if (!_einstein_track_taint_pc &&
-        (einstein_syscalls[ctx->nr].arg_is_tainted(ctx) || !tagqarr_is_empty(ctx->nr_taint)))
+// Add PC field for tainted syscalls (only if we captured PC after recvfrom)
+    string taint_pc_field = "";
+    if (_einstein_last_recvfrom_backtrace != "")
     {
-        ADDRINT pc = PIN_GetContextReg(ctx->pinctx, REG_INST_PTR);
-        einstein_auto_enable_pc_tracking(pc);
+        taint_pc_field = "\"taint_introduction_pc_backtrace\": " + _einstein_last_recvfrom_backtrace + ", ";
     }
+    else{
+        taint_pc_field = "\"taint_introduction_pc_backtrace\": [], ";
+
+    }
+
 
     // If the args are untainted AND the syscall nr is untainted, this is an UNTAINTED syscall
     if (!einstein_syscalls[ctx->nr].arg_is_tainted(ctx) && tagqarr_is_empty(ctx->nr_taint))
@@ -219,6 +207,7 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                          "\"application_testcase\": \"\", "
                          "\"application_corepath\": \"\", "
                          "\"application_corenum\": 0, "
+                         "%s" // taint_pc_field
                          "\"backtrace\": %s, "
                          "\"syscall_nr_taint\": [], "
                          "\"syscall_args\": []"
@@ -227,19 +216,14 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                          report_num,
                          PIN_GetPid(), getppid(), PIN_GetTid(), PIN_GetParentTid(),
                          str_replace(application_name, "\"", "\\\"").c_str(),
+                         taint_pc_field.c_str(),
                          bt_str(ctx->pinctx, true, false).c_str());
             inc_report_num();
         }
         return;
     }
 
-    // ADD PC field for tainted syscalls (ADD THIS SECTION)
-    string taint_pc_field = "";
-    if (_einstein_track_taint_pc && _einstein_last_taint_pc != 0)
-    {
-        taint_pc_field = "\"taint_introduction_pc\": \"" + ptr_to_string((void *)_einstein_last_taint_pc, true) + "\", ";
-    }
-
+    
     EINSTEIN_LOG("Found syscall: {"
                  "\"syscall\": \"%s\", "
                  "\"report_num\": %llu, "
@@ -249,7 +233,7 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                  "\"application_testcase\": \"%s\", "
                  "\"application_corepath\": \"%s\", "
                  "\"application_corenum\": %d, "
-                 "%s" // INSERT taint_pc_field HERE
+                 "%s" // taint_pc_field
                  "\"backtrace\": %s, "
                  "\"syscall_nr_taint\": %s, "
                  "\"syscall_args\": %s"
@@ -261,7 +245,7 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                  str_replace(string(_libdft_debug_str), "\"", "\\\"").c_str(),
                  str_replace(memtaint_get_snapshot_path(), "\"", "\\\"").c_str(),
                  memtaint_get_snapshot_num(),
-                 taint_pc_field.c_str(), // ADD THIS LINE
+                 taint_pc_field.c_str(),
                  bt_str(ctx->pinctx, true, false).c_str(),
                  tagqarr_sprint(ctx->nr_taint).c_str(),
                  einstein_syscalls[ctx->nr].get_details(ctx).c_str());
@@ -275,6 +259,8 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
         ctx->custom = this_report_num_ptr;
     }
     inc_report_num();
+
+    _einstein_last_recvfrom_backtrace.clear(); // Clear it after use
 }
 
 void einstein_post_fd_creator_hook(THREADID tid, syscall_ctx_t *ctx)
@@ -332,8 +318,8 @@ void callbacks_einstein(void)
 {
     einstein_syscalls_init();
 
-    // ADD THIS: Setup main PC capture instrumentation
-    einstein_setup_main_pc_capture_optimized();
+    // Setup PC capture instrumentation (needed for main program bounds checking)
+    einstein_setup_pc_capture();
 
     for (unsigned i = 0; i < SYSCALL_MAX; i++)
     {
@@ -347,4 +333,7 @@ void callbacks_einstein(void)
             (void)syscall_set_post(&syscall_desc[i], einstein_post_fd_creator_hook);
         }
     }
+
+    // Set up post-hook specifically for recvfrom to enable PC waiting
+    (void)syscall_set_post(&syscall_desc[__NR_recvfrom], einstein_post_recvfrom_hook);
 }

@@ -52,7 +52,7 @@ class Report(models.Model):
     application_corepath = models.FilePathField(path="/", recursive=True, max_length=150)
     application_corenum = models.IntegerField()
     backtrace = models.JSONField()
-    taint_introduction_pc = models.CharField(max_length=20, null=True, blank=True)
+    taint_introduction_pc_backtrace = models.JSONField()
     
 
     class Meta:
