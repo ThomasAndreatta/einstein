@@ -148,7 +148,7 @@ void handle_client(int client_socket, int is_uds) {
     }
     
     buffer[bytes_received] = '\0';
-        // printf("Address of %s function: %p\n",__func__ , (void *)handle_client);
+    // printf("Address of %s function: %p\n",__func__ , (void *)handle_client);
 
     if (is_uds) {
         // printf("Received UDS command: %s\n", buffer);
@@ -280,7 +280,6 @@ int main(int argc, char **argv) {
     
     while (1) {
         read_fds = master_fds;
-        
         if (select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0) {
             if (errno == EINTR) {
                 // Interrupted by signal, just continue

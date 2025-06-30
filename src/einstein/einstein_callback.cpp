@@ -153,15 +153,22 @@ void einstein_setup_pc_capture()
 #ifndef __NR_recvfrom
 #define __NR_recvfrom 45
 #endif
+bool _einstein_taintall_triggered = true;
+
+void einstein_taintall_signal_handler(int sig)
+{
+    if (sig == SIGUSR1)
+    {
+        _einstein_taintall_triggered = false;
+    }
+}
 
 void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
 {
     fix_syscall_args(ctx);
 
-    if (ctx->nr == __NR_recvfrom)
-    {
-        _einstein_last_recvfrom_backtrace = bt_str(ctx->pinctx, true, false);
-    }
+
+    
 
     if (ctx->nr == __NR_close)
         fd_close((int)ctx->arg[0]);
@@ -174,6 +181,13 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     if (bt_str(ctx->pinctx, true, true).find("libdbt-cmdsvr") != string::npos)
         return;
 
+    // Check if taintall was triggered and we haven't captured backtrace yet
+    if (_einstein_taintall_triggered)
+    {
+        _einstein_last_recvfrom_backtrace = bt_str(ctx->pinctx, true, false);
+        EINSTEIN_LOG("PC tracking triggered by taintall signal\n");
+    }
+
     // If we're in 'rewrite' mode, only check for this
     if (do_rewrites)
     {
@@ -181,17 +195,17 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
         return;
     }
 
-// Add PC field for tainted syscalls (only if we captured PC after recvfrom)
+
+    // Add PC field for tainted syscalls (only if we captured PC after recvfrom)
     string taint_pc_field = "";
-    if (_einstein_last_recvfrom_backtrace != "")
+    if (!_einstein_taintall_triggered && _einstein_last_recvfrom_backtrace != "")
     {
         taint_pc_field = "\"taint_introduction_pc_backtrace\": " + _einstein_last_recvfrom_backtrace + ", ";
     }
-    else{
+    else
+    {
         taint_pc_field = "\"taint_introduction_pc_backtrace\": [], ";
-
     }
-
 
     // If the args are untainted AND the syscall nr is untainted, this is an UNTAINTED syscall
     if (!einstein_syscalls[ctx->nr].arg_is_tainted(ctx) && tagqarr_is_empty(ctx->nr_taint))
@@ -223,7 +237,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
         return;
     }
 
-    
     EINSTEIN_LOG("Found syscall: {"
                  "\"syscall\": \"%s\", "
                  "\"report_num\": %llu, "
@@ -259,8 +272,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
         ctx->custom = this_report_num_ptr;
     }
     inc_report_num();
-
-    _einstein_last_recvfrom_backtrace.clear(); // Clear it after use
 }
 
 void einstein_post_fd_creator_hook(THREADID tid, syscall_ctx_t *ctx)
@@ -308,6 +319,7 @@ void einstein_post_fd_creator_hook(THREADID tid, syscall_ctx_t *ctx)
         EINSTEIN_LOG("ERROR: FD creator not handled by einstein_post_fd_creator_hook()!\n");
         return;
     }
+
 }
 
 // =====================================================================
@@ -320,7 +332,7 @@ void callbacks_einstein(void)
 
     // Setup PC capture instrumentation (needed for main program bounds checking)
     einstein_setup_pc_capture();
-
+    signal(SIGUSR1, einstein_taintall_signal_handler);
     for (unsigned i = 0; i < SYSCALL_MAX; i++)
     {
         (void)syscall_set_pre(&syscall_desc[i], einstein_pre_syscall_hook);
