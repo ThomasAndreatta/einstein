@@ -30,6 +30,11 @@ static inline void *get_pc()
 }
 
 void handle_client(int client_socket, int is_uds);
+int simple_useless_function3(int val);
+int simple_useless_function2();
+void simple_useless_function(int n);
+void random_string_ops(char *s1,int len_s1);
+int my_str_cmp(char *s1, char *s2, int s1_len);
 
 // Function to print current PC with context
 #define PRINT_PC(context)                     \
@@ -42,70 +47,10 @@ void handle_client(int client_socket, int is_uds);
 // Global variables for cleanup
 int tcp_fd = -1;
 int uds_fd = -1;
-char *cmd_ls = "/bin/ls";
-char *cmd_exec = "/bin/bash";
-char *cmd_echo = "/bin/echo";
-char *path = "/tmp/attack.sh";
+
 int fd;
-mode_t mode = S_IRUSR; // 0644 permissions
 
 char *args[3] = {NULL, NULL, NULL};
-
-void execute_ls()
-{
-    // PRINT_PC("execute_ls entry");
-
-    pid_t pid = fork();
-    if (pid == -1)
-    {
-        perror("Fork failed");
-        return;
-    }
-    else if (pid == 0)
-    {
-        args[0] = cmd_ls;
-        args[1] = path;
-        args[2] = NULL;
-
-        // PRINT_PC("before execve in execute_ls");
-        execve(cmd_ls, args, NULL);
-        perror("execve failed");
-        exit(EXIT_FAILURE);
-    }
-    else
-    {
-        int status;
-        waitpid(pid, &status, 0);
-    }
-}
-
-void execute_exec()
-{
-    // PRINT_PC("execute_exec entry");
-
-    pid_t pid = fork();
-    if (pid == -1)
-    {
-        perror("Fork failed");
-        return;
-    }
-    else if (pid == 0)
-    {
-        args[0] = cmd_exec;
-        args[1] = path;
-        args[2] = NULL;
-
-        // PRINT_PC("before execve in execute_exec");
-        execve(cmd_exec, args, NULL);
-        perror("execve failed");
-        exit(EXIT_FAILURE);
-    }
-    else
-    {
-        int status;
-        waitpid(pid, &status, 0);
-    }
-}
 
 volatile uid_t euid = 1024;
 
@@ -116,102 +61,44 @@ int mmap_flags = MAP_PRIVATE;
 int mmap_fd;
 off_t mmap_offset = 0;
 
-void random_function(){
-    fprintf(stderr,"Im just a random function to change some addresses\n");
-    for (volatile int i = 0; i < 1000; i++)
-        fprintf(stderr,"%d",i);
-    
-}
-void execute_echo()
+char filename[19] = "/tmp/test_file.txt";
+mode_t mode = S_IRUSR;
+void trigger_creat()
 {
-    // PRINT_PC("execute_echo entry");
-    
-    random_function();
-    
-    void *mapped_addr = mmap(mmap_addr, mmap_length, mmap_prot, mmap_flags,
-                             mmap_fd, mmap_offset);
+    // PRINT_PC("trigger_creat");
 
-    // PRINT_PC("after syscall call");
+    /* Make sure that no file gets created in /bin */
+    if(my_str_cmp(filename,"/bin",4))
+        goto skip;
 
-    // printf("handle_client function address: %p\n", (void *)handle_client);
-    // printf("Address of mmap_prot: %p\n", &mmap_prot);
-    // printf("======================\n");
+    fd = creat(filename, mode);
+    skip:
+        fd = 0;
+}
 
-    pid_t pid = fork();
-    if (pid == -1)
-    {
-        perror("Fork failed");
-        return;
-    }
-    else if (pid == 0)
-    {
-        // Open file for writing
-        int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
-        if (fd == -1)
-        {
-            perror("File open failed");
-            exit(EXIT_FAILURE);
-        }
-
-        dup2(fd, STDOUT_FILENO);
-        close(fd);
-        
-        args[0] = cmd_echo;
-        args[1] = "touch /tmp/attacker-was-here";
-        args[2] = NULL;
-
-        // printf("Address of cmd_echo: %p\n", (void *)cmd_echo);
-        // printf("Address of args: %p\n", (void *)args);
-
-
-        // PRINT_PC("before execve in execute_echo");
-        execve(cmd_echo, args, NULL);
-
-        perror("execve failed");
-        exit(EXIT_FAILURE);
-    }
-    else
-    {
-        int status;
-        waitpid(pid, &status, 0);
-
-        if (chmod(path, 0755) == -1)
-        {
-            perror("chmod failed");
-        }
-    }
+void trigger_mmap()
+{
+    // PRINT_PC("trigger_mmap");
+    simple_useless_function(mmap_length);
+    simple_useless_function(mmap_prot);
+    simple_useless_function(mmap_flags);
+    simple_useless_function(mmap_fd);
+    mmap(mmap_addr, mmap_length, mmap_prot, mmap_flags,
+         mmap_fd, mmap_offset);
 }
 
 void handle_execute(char *token)
 {
-    // PRINT_PC("handle_execute entry");
 
-    if (strcmp(token, "ls") == 0)
-    {
-        execute_ls();
-    }
-    else if (strcmp(token, "echo") == 0)
-    {
-        execute_echo();
-    }
-    else if (strcmp(token, "exec") == 0)
-    {
-        execute_exec();
-    }
+    if (strcmp(token, "creat") == 0)
+        trigger_creat();
+    else if (strcmp(token, "mmap") == 0)
+        trigger_mmap();
 }
 
 void handle_client(int client_socket, int is_uds)
 {
-    // PRINT_PC("handle_client entry");
-
     char buffer[BUFFER_SIZE] = {0};
-
-    // printf("=== CLIENT HANDLING ===\n");
-    // printf("Function address: %p\n", (void *)handle_client);
-    // printf("Buffer address: %p\n", (void *)buffer);
-    // printf("Client socket: %d\n", client_socket);
-    // printf("Is UDS: %d\n", is_uds);
-    // printf("=======================\n");
 
     ssize_t bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
     if (bytes_received <= 0)
@@ -243,21 +130,13 @@ void handle_client(int client_socket, int is_uds)
             handle_execute(token);
         }
     }
-    else if (strcmp(token, "SET") == 0)
-    {
-        token = strtok(NULL, "\n");
-        if (token)
-        {
-            path = strdup(token);
-            // printf("Set the path to %s\n", path);
-        }
-    }
 }
 
 int main(int argc, char **argv)
 {
     // PRINT_PC("main entry");
     mmap_fd = open("/tmp/mmap_test", O_RDWR | O_CREAT, 0644);
+
     struct sockaddr_in tcp_addr;
     int addrlen = sizeof(tcp_addr);
     int port = DEFAULT_PORT;
@@ -267,13 +146,6 @@ int main(int argc, char **argv)
         port = atoi(argv[1]);
     }
 
-    // printf("=== SERVER STARTUP ===\n");
-    // printf("Main function address: %p\n", (void *)main);
-    // printf("TCP addr struct address: %p\n", (void *)&tcp_addr);
-    // printf("Port: %d\n", port);
-    // printf("======================\n");
-
-    // Create TCP socket
     if ((tcp_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
         perror("TCP socket creation failed");
@@ -287,20 +159,12 @@ int main(int argc, char **argv)
     tcp_addr.sin_addr.s_addr = INADDR_ANY;
     tcp_addr.sin_port = htons(port);
 
-    // printf("=== BIND OPERATION ===\n");
-    // PRINT_PC("before bind call");
-    // printf("TCP socket fd: %d\n", tcp_fd);
-    // printf("Address structure: family=%d, addr=%u, port=%d\n",
-    //       tcp_addr.sin_family, tcp_addr.sin_addr.s_addr, ntohs(tcp_addr.sin_port));
-
     if (bind(tcp_fd, (struct sockaddr *)&tcp_addr, sizeof(tcp_addr)) < 0)
     {
         perror("TCP bind failed");
         close(tcp_fd);
         exit(EXIT_FAILURE);
     }
-    // PRINT_PC("after bind call");
-    // printf("======================\n");
 
     if (listen(tcp_fd, 5) < 0)
     {
@@ -368,62 +232,118 @@ int main(int argc, char **argv)
     }
 
     // printf("Server started on TCP port %d and UDS socket %s (PID: %d)\n",
-           port, socket_path, pid);
+        //    port, socket_path, pid);
 
-    // Set up select to monitor both sockets
-    FD_SET(uds_fd, &master_fds);
+           // Set up select to monitor both sockets
+           FD_SET(uds_fd, &master_fds);
 #endif
 
-    int max_fd = (tcp_fd > uds_fd) ? tcp_fd : uds_fd;
+           int max_fd = (tcp_fd > uds_fd) ? tcp_fd : uds_fd;
 
-    // printf("=== SERVER LISTENING ===\n");
-    // printf("Max FD: %d\n", max_fd);
-    // PRINT_PC("entering main loop");
-    // printf("========================\n");
+           while (1)
+           {
+               read_fds = master_fds;
+               if (select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0)
+               {
+                   if (errno == EINTR)
+                   {
+                       // Interrupted by signal, just continue
+                       continue;
+                   }
+                   perror("select failed");
+                   break;
+               }
 
-    while (1)
-    {
-        read_fds = master_fds;
-        if (select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0)
-        {
-            if (errno == EINTR)
-            {
-                // Interrupted by signal, just continue
-                continue;
-            }
-            perror("select failed");
-            break;
-        }
+               // Check for TCP connections
+               if (FD_ISSET(tcp_fd, &read_fds))
+               {
+                   // PRINT_PC("before TCP accept");
+                   int client_socket = accept(tcp_fd, (struct sockaddr *)&tcp_addr, (socklen_t *)&addrlen);
+                   if (client_socket < 0)
+                       continue;
 
-        // Check for TCP connections
-        if (FD_ISSET(tcp_fd, &read_fds))
-        {
-            // PRINT_PC("before TCP accept");
-            int client_socket = accept(tcp_fd, (struct sockaddr *)&tcp_addr, (socklen_t *)&addrlen);
-            if (client_socket < 0)
-                continue;
-
-            handle_client(client_socket, 0); // 0 = TCP
-            close(client_socket);
-        }
+                   handle_client(client_socket, 0); // 0 = TCP
+                   close(client_socket);
+               }
 
 #ifdef UDS
-        // Check for UDS connections
-        if (FD_ISSET(uds_fd, &read_fds))
-        {
-            struct sockaddr_un client_addr;
-            socklen_t addr_len = sizeof(client_addr);
+               // Check for UDS connections
+               if (FD_ISSET(uds_fd, &read_fds))
+               {
+                   struct sockaddr_un client_addr;
+                   socklen_t addr_len = sizeof(client_addr);
 
-            // PRINT_PC("before UDS accept");
-            int client_socket = accept(uds_fd, (struct sockaddr *)&client_addr, &addr_len);
-            if (client_socket < 0)
-                continue;
+                   // PRINT_PC("before UDS accept");
+                   int client_socket = accept(uds_fd, (struct sockaddr *)&client_addr, &addr_len);
+                   if (client_socket < 0)
+                       continue;
 
-            handle_client(client_socket, 1); // 1 = UDS
-            close(client_socket);
-        }
+                   handle_client(client_socket, 1); // 1 = UDS
+                   close(client_socket);
+               }
 #endif
+           }
+
+           return 0;
+}
+
+
+int simple_useless_function3(int val)
+{
+    int y = val;
+    for (int i = 0; i < 10; i++)
+        y ^= (i * 31);
+    return y;
+}
+
+int simple_useless_function2()
+{
+    int x = rand() % 100;
+    for (int i = 0; i < x; i++)
+        x = (x * 7 + 3) % 97;
+    return x;
+}
+
+void simple_useless_function(int n)
+{
+    if (n % 2 == 0)
+        simple_useless_function2();
+    else if (n % 3 == 0)
+        simple_useless_function3(n);
+}
+
+void random_string_ops(char *s1,int len_s1)
+{
+    volatile int i = 0;
+
+    for (i = 0; i < len_s1 - 1; i++)
+    {
+        if (s1[i] == ']')
+            s1++;
     }
 
-    return 0;
+    i=0;
+    while (i < len_s1)
+    {
+        i += 1;
+        if (*s1 != ']')
+            s1++;
+    }
+
+    if(s1[2] == 'Q')
+        s1[2] = '}';
+}
+
+int my_str_cmp(char *s1, char *s2, int s1_len){
+    int s2_len = strlen(s2);
+
+    if(s2_len > s1_len)
+        return 0;
+
+    for(int i = 0; i < s2_len; i++){
+        if(s1[i] != s2[i])
+            return 0;
+    }
+    
+    return (s1[s2_len] == '\0' || s1_len == s2_len);
 }
