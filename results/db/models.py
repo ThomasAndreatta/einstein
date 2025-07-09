@@ -53,6 +53,7 @@ class Report(models.Model):
     application_corenum = models.IntegerField()
     backtrace = models.JSONField()
     taint_introduction_pc_backtrace = models.JSONField()
+    pin_base_address = models.CharField(max_length=100)
     
 
     class Meta:
