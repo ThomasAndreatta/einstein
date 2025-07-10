@@ -1,651 +1,659 @@
 #!/usr/bin/env python3
+"""
+Syscall Taint Analysis Configuration Generator
+
+This script analyzes syscall traces to identify tainted syscalls and generates
+configuration files for S2E symbolic execution.
+"""
+
 import json
 import sys
 import re
+from typing import Dict, List, Optional, Tuple, Union
 
-# Global variable to store syscall configuration
-SYSCALL_CONFIG = {}
 
-def load_syscall_config(config_file):
-    global SYSCALL_CONFIG
-    try:
-        with open(config_file, 'r') as f:
-            SYSCALL_CONFIG = json.load(f)
-        print(f"Loaded syscall configuration from {config_file}")
-    except FileNotFoundError:
-        print(f"Warning: Config file '{config_file}' not found. Using empty configuration.")
-        SYSCALL_CONFIG = {}
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in config file '{config_file}': {e}")
-        sys.exit(1)
-
-def load_json_file(filename):
-    try:
-        with open(filename, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"Error: File '{filename}' not found.")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in file '{filename}': {e}")
-        sys.exit(1)
-
-def is_library_path(backtrace_entry):
-    library_indicators = [
-        '/lib64/',
-        '/lib/x86_64-linux-gnu/',
-        '/lib/i386-linux-gnu/',
-        '/lib/',
-        '/usr/lib/',
-        'libc.so',
-        'ld-linux',
-        '.so.'
-    ]
-    return any(indicator in backtrace_entry for indicator in library_indicators)
-
-def extract_address_from_backtrace(backtrace_entry):
-    # Look for pattern like "server+0x7fff00102f74" after " at "
-    # This gives us the absolute address in the binary, not just the function offset
-    match = re.search(r' at [^+]+\+0x([0-9a-fA-F]+)', backtrace_entry)
-    if match:
-        return match.group(1)
+class SyscallConfig:
+    """Handles syscall configuration loading and validation."""
     
-    # Fallback: look for the last hex address pattern in the entry
-    matches = re.findall(r'\+0x([0-9a-fA-F]+)', backtrace_entry)
-    if matches:
-        return matches[-1]  # Return the last (absolute) address
-    return None
-
-def get_syscall_sink_pc(backtrace):
-    if not backtrace:
-        return None
+    def __init__(self, config_file: str = "syscall_config.json"):
+        self.config = {}
+        self.load_config(config_file)
     
-    # Find the first non-library entry
-    for entry in backtrace:
-        if not is_library_path(entry):
-            offset = extract_address_from_backtrace(entry)
-            if offset:
-                return f"0x{offset.upper()}"
-    
-    # If no non-library entry found, fall back to first entry
-    first_entry = backtrace[0]
-    offset = extract_address_from_backtrace(first_entry)
-    if offset:
-        return f"0x{offset.upper()}"
-    return None
-
-def get_taint_introduction_pc(taint_backtrace):
-    if not taint_backtrace:
-        return None
-    
-    # Find the first non-library entry
-    for entry in taint_backtrace:
-        if not is_library_path(entry):
-            offset = extract_address_from_backtrace(entry)
-            if offset:
-                return f"0x{offset.upper()}"
-    
-    # If no non-library entry found, fall back to first entry
-    first_entry = taint_backtrace[0]
-    offset = extract_address_from_backtrace(first_entry)
-    if offset:
-        return f"0x{offset.upper()}"
-    return None
-
-def create_syscall_signature(call):
-    syscall_name = call.get('syscall', 'unknown')
-    syscall_args = call.get('syscall_args', [])
-    backtrace = call.get('backtrace', [])
-    
-    # Create a signature based on syscall name, args, and backtrace
-    args_signature = []
-    for arg in syscall_args:
-        if arg['type'] == 'QWORD':
-            args_signature.append(f"QWORD:{arg.get('qword', 0)}")
-        elif arg['type'] == 'DWORD':
-            args_signature.append(f"DWORD:{arg.get('dword', 0)}")
-        elif arg['type'] == 'WORD':
-            args_signature.append(f"WORD:{arg.get('word', 0)}")
-        elif arg['type'] == 'BYTE':
-            args_signature.append(f"BYTE:{arg.get('byte', 0)}")
-    
-    # Use first few backtrace entries for signature (skip library calls)
-    backtrace_signature = []
-    for entry in backtrace[:3]:  # Use first 3 entries
-        if not is_library_path(entry):
-            backtrace_signature.append(entry)
-    
-    signature = f"{syscall_name}|{','.join(args_signature)}|{','.join(backtrace_signature)}"
-    return signature
-
-def filter_tainted_syscalls(data):
-    tainted_calls = []
-    seen_signatures = set()
-    skipped_count = 0
-    duplicate_count = 0
-    
-    for call in data:
-        if call.get('tainted', False):
-            syscall_name = call.get('syscall', 'unknown')
-            # Only include syscalls that are in the configuration
-            if syscall_name in SYSCALL_CONFIG:
-                # Check for duplicates
-                signature = create_syscall_signature(call)
-                if signature not in seen_signatures:
-                    seen_signatures.add(signature)
-                    tainted_calls.append(call)
-                else:
-                    duplicate_count += 1
-            else:
-                skipped_count += 1
-    
-    if skipped_count > 0:
-        print(f"Skipped {skipped_count} tainted syscall(s) - not found in configuration")
-    if duplicate_count > 0:
-        print(f"Removed {duplicate_count} duplicate tainted syscall(s)")
-    
-    return tainted_calls
-
-def has_taint_data(arg):
-    """Check if an argument has any taint data."""
-    arg_type = arg.get('type', 'unknown')
-    
-    if arg_type == 'QWORD':
-        qword_taint = arg.get('qword_taint', [])
-        return qword_taint and any(taint_list for taint_list in qword_taint if taint_list)
-    elif arg_type == 'DWORD':
-        dword_taint = arg.get('dword_taint', [])
-        return dword_taint and any(taint_list for taint_list in dword_taint if taint_list)
-    elif arg_type == 'WORD':
-        word_taint = arg.get('word_taint', [])
-        return word_taint and any(taint_list for taint_list in word_taint if taint_list)
-    elif arg_type == 'BYTE':
-        byte_taint = arg.get('byte_taint', [])
-        return byte_taint and any(taint_list for taint_list in byte_taint if taint_list)
-    elif arg_type == 'VPTR':
-        # Check both qword_taint and buf_taint for string pointers
-        qword_taint = arg.get('qword_taint', [])
-        buf_taint = arg.get('buf_taint', [])
-        return ((qword_taint and any(taint_list for taint_list in qword_taint if taint_list)) or
-                (buf_taint and any(taint_list for taint_list in buf_taint if taint_list)))
-    elif arg_type == 'PPCHAR':
-        # Check qword_taint and also check nested pchars
-        qword_taint = arg.get('qword_taint', [])
-        has_qword_taint = qword_taint and any(taint_list for taint_list in qword_taint if taint_list)
-        
-        # Check if any of the nested pchars have taint
-        pchars = arg.get('pchars', [])
-        has_nested_taint = False
-        for pchar in pchars:
-            if has_taint_data(pchar):  # Recursive check
-                has_nested_taint = True
-                break
-        
-        return has_qword_taint or has_nested_taint
-    
-    return False
-
-def get_argument_display_info(arg, arg_index, arg_name):
-    """Get display information for an argument including its content and size."""
-    arg_type = arg.get('type', 'unknown')
-    content_info = ""
-    size_info = ""
-    
-    if arg_type == 'VPTR':
-        # String pointer - show string content and calculate actual length
-        string_content = arg.get('str', '')
-        buf = arg.get('buf', [])
-        if buf:
-            # Calculate actual buffer length (including null terminator if present)
-            actual_length = len(buf)
-            content_info = f" = \"{string_content}\" (actual length: {actual_length} bytes)"
-            size_info = f" [{actual_length} bytes]"
-        else:
-            content_info = f" = \"{string_content}\""
-            size_info = f" [pointer: 8 bytes]"
-    elif arg_type == 'PPCHAR':
-        # Array of string pointers
-        pchars = arg.get('pchars', [])
-        if pchars:
-            content_info = f" (array with {len(pchars)} elements)"
-            size_info = f" [pointer: 8 bytes]"
-        else:
-            content_info = " (empty array)"
-            size_info = f" [pointer: 8 bytes]"
-    elif arg_type == 'QWORD':
-        value = arg.get('qword', 0)
-        content_info = f" = 0x{value:x}"
-        size_info = f" [8 bytes]"
-    elif arg_type == 'DWORD':
-        value = arg.get('dword', 0)
-        content_info = f" = 0x{value:x}"
-        size_info = f" [4 bytes]"
-    elif arg_type == 'WORD':
-        value = arg.get('word', 0)
-        content_info = f" = 0x{value:x}"
-        size_info = f" [2 bytes]"
-    elif arg_type == 'BYTE':
-        value = arg.get('byte', 0)
-        content_info = f" = 0x{value:x}"
-        size_info = f" [1 byte]"
-    else:
-        content_info = ""
-        size_info = f" [unknown size]"
-    
-    return content_info, size_info
-
-def display_tainted_syscalls(tainted_calls):
-    if not tainted_calls:
-        print("\nNo tainted syscalls found that are defined in the configuration file.")
-        return
-        
-    print(f"\nTainted Syscalls Found (from config file):")
-    print("=" * 50)
-    
-    for i, call in enumerate(tainted_calls, 1):
-        syscall_name = call.get('syscall', 'unknown')
-        report_num = call.get('report_num', 'N/A')
-        pid = call.get('pid', 'N/A')
-        
-        # Show syscall info from config
-        config_info = SYSCALL_CONFIG.get(syscall_name, {})
-        syscall_number = config_info.get('syscall_number', 'unknown')
-        valid_args = config_info.get('valid_args', [])
-        
-        print(f"{i}. Syscall: {syscall_name} (syscall #{syscall_number})")
-        print(f"   Report Number: {report_num}")
-        print(f"   PID: {pid}")
-        print(f"   Valid Arguments: {valid_args}")
-        print(f"   Backtrace:")
-        
-        backtrace = call.get('backtrace', [])
-        for j, frame in enumerate(backtrace[:5]):  # Show first 5 frames
-            library_indicator = " (library)" if is_library_path(frame) else " (program)"
-            print(f"     {j+1}: {frame}{library_indicator}")
-        if len(backtrace) > 5:
-            print(f"     ... and {len(backtrace) - 5} more frames")
-        print()
-
-def select_execve_argument(syscall_args, config_info):
-    """Handle special case for execve with nested arguments."""
-    nested_args = config_info.get('nested_args', {})
-    
-    print(f"\nExecutve Arguments:")
-    main_choices = []
-    
-    # Show main arguments (only those with taint data)
-    for i, arg in enumerate(syscall_args, 1):
-        if has_taint_data(arg):  # Only show if argument has taint data
-            if str(i) in nested_args:
-                nested_info = nested_args[str(i)]
-                content_info, size_info = get_argument_display_info(arg, i, nested_info['description'])
-                print(f"  {i}: {nested_info['description']} ({arg.get('type', 'unknown')}){content_info}{size_info} [TAINTED]")
-                main_choices.append(i)
-            else:
-                arg_names = config_info.get('arg_names', [])
-                arg_name = arg_names[i-1] if i-1 < len(arg_names) else f"arg{i}"
-                content_info, size_info = get_argument_display_info(arg, i, arg_name)
-                print(f"  {i}: {arg_name} ({arg.get('type', 'unknown')}){content_info}{size_info} [TAINTED]")
-                main_choices.append(i)
-    
-    if not main_choices:
-        print("No tainted arguments found for this syscall!")
-        return None, None
-    
-    # Select main argument
-    while True:
+    def load_config(self, config_file: str):
+        """Load syscall configuration from JSON file."""
         try:
-            main_choice = int(input(f"\nSelect main argument from tainted options {main_choices}: "))
-            if main_choice in main_choices:
-                break
-            else:
-                print(f"Please select from tainted arguments: {main_choices}")
-        except ValueError:
-            print("Please enter a valid number")
+            with open(config_file, 'r') as f:
+                self.config = json.load(f)
+            print(f"Loaded syscall configuration from {config_file}")
+        except FileNotFoundError:
+            print(f"Warning: Config file '{config_file}' not found. Using empty configuration.")
+            self.config = {}
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in config file '{config_file}': {e}")
+            sys.exit(1)
     
-    # Check if this argument has sub-arguments
-    main_arg = syscall_args[main_choice - 1]
-    if str(main_choice) in nested_args and main_arg.get('type') == 'PPCHAR' and 'pchars' in main_arg:
-        nested_info = nested_args[str(main_choice)]
-        sub_args = nested_info.get('sub_args', {})
-        pchars = main_arg['pchars']
-        
-        print(f"\nSub-arguments for {nested_info['description']}:")
-        sub_choices = []
-        for j, pchar in enumerate(pchars):
-            if str(j) in sub_args and has_taint_data(pchar):  # Only show if has taint data
-                string_content = pchar.get('str', '')
-                is_null = pchar.get('qword', 0) == 0
-                if is_null:
-                    status = " (NULL)"
-                    size_info = " [0 bytes]"
-                else:
-                    buf = pchar.get('buf', [])
-                    if buf:
-                        actual_length = len(buf)
-                        status = f" = \"{string_content}\" (length: {actual_length} bytes)"
-                        size_info = f" [{actual_length} bytes]"
-                    else:
-                        status = f" = \"{string_content}\""
-                        size_info = f" [pointer: 8 bytes]"
-                print(f"  {j}: {sub_args[str(j)]}{status}{size_info} [TAINTED]")
-                sub_choices.append(j)
-        
-        if sub_choices:
-            while True:
-                try:
-                    sub_choice = int(input(f"\nSelect sub-argument from tainted options {sub_choices}: "))
-                    if sub_choice in sub_choices:
-                        return main_choice, sub_choice
-                    else:
-                        print(f"Please select from tainted sub-arguments: {sub_choices}")
-                except ValueError:
-                    print("Please enter a valid number")
-        else:
-            print("No tainted sub-arguments available")
-            return main_choice, None
-    else:
-        return main_choice, None
+    def get_syscall_info(self, syscall_name: str) -> Optional[Dict]:
+        """Get configuration info for a syscall."""
+        return self.config.get(syscall_name)
+    
+    def is_supported(self, syscall_name: str) -> bool:
+        """Check if syscall is supported in configuration."""
+        return syscall_name in self.config
+    
+    def get_supported_syscalls(self) -> List[str]:
+        """Get list of supported syscall names."""
+        return list(self.config.keys())
 
-def select_syscall_and_argument(tainted_calls):
-    while True:
-        try:
-            choice = int(input(f"\nSelect a tainted syscall (1-{len(tainted_calls)}): "))
-            if 1 <= choice <= len(tainted_calls):
-                selected_call = tainted_calls[choice - 1]
-                break
-            else:
-                print(f"Please enter a number between 1 and {len(tainted_calls)}")
-        except ValueError:
-            print("Please enter a valid number")
-    
-    syscall_name = selected_call.get('syscall', 'unknown')
-    syscall_args = selected_call.get('syscall_args', [])
-    
-    # Check if syscall is supported
-    if syscall_name not in SYSCALL_CONFIG:
-        print(f"Warning: Syscall '{syscall_name}' not found in configuration")
-        print(f"Available tainted arguments:")
-        
-        # Only show arguments that have taint data
-        tainted_arg_choices = []
-        for i, arg in enumerate(syscall_args, 1):
-            if has_taint_data(arg):
-                content_info, size_info = get_argument_display_info(arg, i, f"arg{i}")
-                print(f"  {i}: arg{i} ({arg.get('type', 'unknown')}){content_info}{size_info} [TAINTED]")
-                tainted_arg_choices.append(i)
-        
-        if not tainted_arg_choices:
-            print("No tainted arguments found for this syscall!")
-            return None, None, None
-        
-        while True:
-            try:
-                arg_choice = int(input(f"Select argument to track from tainted options {tainted_arg_choices}: "))
-                if arg_choice in tainted_arg_choices:
-                    break
-                else:
-                    print(f"Please select from tainted arguments: {tainted_arg_choices}")
-            except ValueError:
-                print("Please enter a valid number")
-        return selected_call, arg_choice, None
-    
-    config = SYSCALL_CONFIG[syscall_name]
-    syscall_number = config['syscall_number']
-    
-    # Handle special case for execve
-    if syscall_name == 'execve' and config.get('special_handling', False):
-        main_arg, sub_arg = select_execve_argument(syscall_args, config)
-        if main_arg is None:
-            print("No tainted arguments available for selection!")
-            return None, None, None
-        if sub_arg is not None:
-            arg_choice = (main_arg, sub_arg)  # Return tuple for nested
-        else:
-            arg_choice = main_arg
-    else:
-        # Regular syscall handling - only show tainted arguments
-        valid_args = config['valid_args']
-        arg_names = config['arg_names']
-        
-        print(f"\nSelected syscall: {syscall_name}")
-        print(f"Available tainted arguments:")
-        
-        # Filter to only show arguments that are both valid and tainted
-        tainted_valid_choices = []
-        for i, arg_name in enumerate(arg_names, 1):
-            if i in valid_args and i <= len(syscall_args) and has_taint_data(syscall_args[i-1]):
-                arg = syscall_args[i-1]
-                content_info, size_info = get_argument_display_info(arg, i, arg_name)
-                print(f"  {i}: {arg_name} ({arg.get('type', 'unknown')}){content_info}{size_info} [TAINTED]")
-                tainted_valid_choices.append(i)
-        
-        if not tainted_valid_choices:
-            print("No tainted arguments found in the valid argument list!")
-            return None, None, None
-        
-        # Select argument
-        while True:
-            try:
-                arg_choice = int(input(f"\nSelect argument to track from tainted options {tainted_valid_choices}: "))
-                if arg_choice in tainted_valid_choices:
-                    break
-                else:
-                    print(f"Please select from tainted arguments: {tainted_valid_choices}")
-            except ValueError:
-                print("Please enter a valid number")
-    
-    return selected_call, arg_choice, syscall_number
 
-def get_argument_size(arg):
-    """Calculate the actual size of an argument based on its type and content."""
-    arg_type = arg.get('type', 'unknown')
+class TaintAnalyzer:
+    """Handles taint analysis and argument inspection."""
     
-    if arg_type == 'VPTR':
-        # For string pointers, use the actual buffer length if available
-        buf = arg.get('buf', [])
-        if buf:
-            return len(buf)  # Actual string length including null terminator
-        else:
-            # Fallback: try to calculate from string content
+    @staticmethod
+    def has_taint_data(arg: Dict) -> bool:
+        """Check if an argument has any taint data."""
+        arg_type = arg.get('type', 'unknown')
+        
+        if arg_type == 'QWORD':
+            qword_taint = arg.get('qword_taint', [])
+            return qword_taint and any(taint_list for taint_list in qword_taint if taint_list)
+        
+        elif arg_type == 'DWORD':
+            dword_taint = arg.get('dword_taint', [])
+            return dword_taint and any(taint_list for taint_list in dword_taint if taint_list)
+        
+        elif arg_type == 'WORD':
+            word_taint = arg.get('word_taint', [])
+            return word_taint and any(taint_list for taint_list in word_taint if taint_list)
+        
+        elif arg_type == 'BYTE':
+            byte_taint = arg.get('byte_taint', [])
+            return byte_taint and any(taint_list for taint_list in byte_taint if taint_list)
+        
+        elif arg_type == 'VPTR':
+            # Check both qword_taint (pointer taint) and buf_taint (buffer content taint)
+            qword_taint = arg.get('qword_taint', [])
+            buf_taint = arg.get('buf_taint', [])
+            
+            has_qword_taint = qword_taint and any(taint_list for taint_list in qword_taint if taint_list)
+            has_buf_taint = buf_taint and any(taint_list for taint_list in buf_taint if taint_list)
+            
+            return has_qword_taint or has_buf_taint
+        
+        elif arg_type == 'PPCHAR':
+            # Check qword_taint and nested pchars
+            qword_taint = arg.get('qword_taint', [])
+            has_qword_taint = qword_taint and any(taint_list for taint_list in qword_taint if taint_list)
+            
+            # Check nested pchars
+            pchars = arg.get('pchars', [])
+            has_nested_taint = any(TaintAnalyzer.has_taint_data(pchar) for pchar in pchars)
+            
+            return has_qword_taint or has_nested_taint
+        
+        return False
+    
+    @staticmethod
+    def get_taint_address(arg: Dict) -> Optional[int]:
+        """Extract the taint address from an argument."""
+        arg_type = arg.get('type', 'unknown')
+        
+        if arg_type == 'QWORD':
+            qword_taint = arg.get('qword_taint', [])
+            if qword_taint and len(qword_taint) > 0 and len(qword_taint[0]) > 0:
+                return qword_taint[0][0]
+            return arg.get('qword', 0)
+        
+        elif arg_type == 'DWORD':
+            dword_taint = arg.get('dword_taint', [])
+            if dword_taint and len(dword_taint) > 0 and len(dword_taint[0]) > 0:
+                return dword_taint[0][0]
+            return arg.get('dword', 0)
+        
+        elif arg_type == 'WORD':
+            word_taint = arg.get('word_taint', [])
+            if word_taint and len(word_taint) > 0 and len(word_taint[0]) > 0:
+                return word_taint[0][0]
+            return arg.get('word', 0)
+        
+        elif arg_type == 'BYTE':
+            byte_taint = arg.get('byte_taint', [])
+            if byte_taint and len(byte_taint) > 0 and len(byte_taint[0]) > 0:
+                return byte_taint[0][0]
+            return arg.get('byte', 0)
+        
+        elif arg_type == 'VPTR':
+            # For VPTR, try buf_taint first (buffer content), then qword_taint (pointer)
+            buf_taint = arg.get('buf_taint', [])
+            if buf_taint and len(buf_taint) > 0 and len(buf_taint[0]) > 0:
+                return buf_taint[0][0]  # Address of first tainted byte in buffer
+            
+            qword_taint = arg.get('qword_taint', [])
+            if qword_taint and len(qword_taint) > 0 and len(qword_taint[0]) > 0:
+                return qword_taint[0][0]
+            
+            return arg.get('qword', 0)
+        
+        elif arg_type == 'PPCHAR':
+            qword_taint = arg.get('qword_taint', [])
+            if qword_taint and len(qword_taint) > 0 and len(qword_taint[0]) > 0:
+                return qword_taint[0][0]
+            return arg.get('qword', 0)
+        
+        return 0
+    
+    @staticmethod
+    def get_argument_size(arg: Dict) -> int:
+        """Calculate the actual size of an argument."""
+        arg_type = arg.get('type', 'unknown')
+        
+        if arg_type == 'VPTR':
+            # For string pointers, use actual buffer length
+            buf = arg.get('buf', [])
+            if buf:
+                return len(buf)
+            # Fallback to string length + null terminator
             string_content = arg.get('str', '')
-            return len(string_content.encode('utf-8')) + 1  # +1 for null terminator
-    elif arg_type == 'PPCHAR':
-        return 8  # Pointer size
-    elif arg_type == 'QWORD':
-        return 8
-    elif arg_type == 'DWORD':
-        return 4
-    elif arg_type == 'WORD':
-        return 2
-    elif arg_type == 'BYTE':
-        return 1
-    else:
-        return 8  # Default fallback
-
-def get_execve_nested_argument_info(syscall_args, main_arg, sub_arg):
-    if main_arg < 1 or main_arg > len(syscall_args):
-        return None, None
+            return len(string_content.encode('utf-8')) + 1
         
-    main_argument = syscall_args[main_arg - 1]
+        # Fixed sizes for other types
+        size_map = {
+            'QWORD': 8,
+            'DWORD': 4, 
+            'WORD': 2,
+            'BYTE': 1,
+            'PPCHAR': 8  # Pointer size
+        }
+        
+        return size_map.get(arg_type, 8)  # Default to 8 bytes
+
+
+class BacktraceAnalyzer:
+    """Handles backtrace analysis and PC extraction."""
     
-    if main_argument.get('type') == 'PPCHAR' and 'pchars' in main_argument:
-        pchars = main_argument['pchars']
-        if sub_arg < len(pchars):
-            sub_argument = pchars[sub_arg]
-            # Check if this is a null pointer or empty entry
-            if sub_argument.get('qword', 0) == 0:
-                print(f"Warning: argv[{sub_arg}] appears to be null or empty")
-                return 0, 0
-            
-            # Get taint from the nested structure
-            taint_data = sub_argument.get('qword_taint', [])
-            if taint_data and len(taint_data) > 0 and len(taint_data[0]) > 0:
-                address = taint_data[0][0]
+    LIBRARY_INDICATORS = [
+        '/lib64/', '/lib/x86_64-linux-gnu/', '/lib/i386-linux-gnu/',
+        '/lib/', '/usr/lib/', 'libc.so', 'ld-linux', '.so.'
+    ]
+    
+    @staticmethod
+    def is_library_path(backtrace_entry: str) -> bool:
+        """Check if a backtrace entry is from a library."""
+        return any(indicator in backtrace_entry for indicator in BacktraceAnalyzer.LIBRARY_INDICATORS)
+    
+    @staticmethod
+    def extract_address_from_backtrace(backtrace_entry: str) -> Optional[str]:
+        """Extract hex address from backtrace entry."""
+        # Look for pattern like "server+0x7fff00102f74" after " at "
+        match = re.search(r' at [^+]+\+0x([0-9a-fA-F]+)', backtrace_entry)
+        if match:
+            return match.group(1)
+        
+        # Fallback: look for the last hex address pattern
+        matches = re.findall(r'\+0x([0-9a-fA-F]+)', backtrace_entry)
+        if matches:
+            return matches[-1]
+        
+        return None
+    
+    @staticmethod
+    def get_pc_from_backtrace(backtrace: List[str]) -> Optional[str]:
+        """Get PC from backtrace (first non-library entry)."""
+        if not backtrace:
+            return None
+        
+        # Find first non-library entry
+        for entry in backtrace:
+            if not BacktraceAnalyzer.is_library_path(entry):
+                offset = BacktraceAnalyzer.extract_address_from_backtrace(entry)
+                if offset:
+                    return f"0x{offset.upper()}"
+        
+        # Fallback to first entry
+        first_entry = backtrace[0]
+        offset = BacktraceAnalyzer.extract_address_from_backtrace(first_entry)
+        if offset:
+            return f"0x{offset.upper()}"
+        
+        return None
+
+
+class ArgumentDisplay:
+    """Handles argument display formatting."""
+    
+    @staticmethod
+    def format_argument_info(arg: Dict, arg_index: int, arg_name: str) -> Tuple[str, str]:
+        """Format argument information for display."""
+        arg_type = arg.get('type', 'unknown')
+        
+        if arg_type == 'VPTR':
+            string_content = arg.get('str', '')
+            buf = arg.get('buf', [])
+            if buf:
+                actual_length = len(buf)
+                content_info = f' = "{string_content}" (length: {actual_length} bytes)'
+                size_info = f' [{actual_length} bytes]'
             else:
-                address = sub_argument.get('qword', 0)
-            
-            # Calculate size for the string content
-            size = get_argument_size(sub_argument)
-            return address, size
+                content_info = f' = "{string_content}"'
+                size_info = ' [pointer: 8 bytes]'
+        
+        elif arg_type == 'PPCHAR':
+            pchars = arg.get('pchars', [])
+            if pchars:
+                content_info = f' (array with {len(pchars)} elements)'
+            else:
+                content_info = ' (empty array)'
+            size_info = ' [pointer: 8 bytes]'
+        
+        elif arg_type in ['QWORD', 'DWORD', 'WORD', 'BYTE']:
+            value_field = arg_type.lower()
+            value = arg.get(value_field, 0)
+            content_info = f' = 0x{value:x}'
+            size_info = f' [{TaintAnalyzer.get_argument_size(arg)} bytes]'
+        
         else:
-            print(f"Warning: argv[{sub_arg}] index out of range")
-            return None, None
-    
-    return None, None
+            content_info = ''
+            size_info = ' [unknown size]'
+        
+        return content_info, size_info
 
-def get_argument_info(syscall_args, arg_choice):
-    # Handle execve nested arguments (tuple format)
-    if isinstance(arg_choice, tuple) and len(arg_choice) == 2:
-        main_arg, sub_arg = arg_choice
-        return get_execve_nested_argument_info(syscall_args, main_arg, sub_arg)
-    
-    # Handle regular arguments (must be integer)
-    arg_index = arg_choice
-    
-    # Regular argument handling for non-nested cases
-    if arg_index < 1 or arg_index > len(syscall_args):
-        return None, None
-    
-    arg = syscall_args[arg_index - 1]  # Convert to 0-based index
-    
-    # Get the address and size based on argument type
-    address = None
-    size = get_argument_size(arg)
-    
-    if arg['type'] == 'QWORD':
-        address = arg.get('qword', 0)
-        # Get the first taint address if available
-        qword_taint = arg.get('qword_taint', [])
-        if qword_taint and len(qword_taint) > 0 and len(qword_taint[0]) > 0:
-            address = qword_taint[0][0]  # First element of first taint entry
-    elif arg['type'] == 'DWORD':
-        address = arg.get('dword', 0)
-        # Get the first taint address if available
-        dword_taint = arg.get('dword_taint', [])
-        if dword_taint and len(dword_taint) > 0 and len(dword_taint[0]) > 0:
-            address = dword_taint[0][0]  # First element of first taint entry
-    elif arg['type'] == 'WORD':
-        address = arg.get('word', 0)
-        # Get the first taint address if available
-        word_taint = arg.get('word_taint', [])
-        if word_taint and len(word_taint) > 0 and len(word_taint[0]) > 0:
-            address = word_taint[0][0]  # First element of first taint entry
-    elif arg['type'] == 'BYTE':
-        address = arg.get('byte', 0)
-        # Get the first taint address if available
-        byte_taint = arg.get('byte_taint', [])
-        if byte_taint and len(byte_taint) > 0 and len(byte_taint[0]) > 0:
-            address = byte_taint[0][0]  # First element of first taint entry
-    elif arg['type'] in ['VPTR', 'PPCHAR']:
-        address = arg.get('qword', 0)
-        # Get the first taint address if available
-        qword_taint = arg.get('qword_taint', [])
-        if qword_taint and len(qword_taint) > 0 and len(qword_taint[0]) > 0:
-            address = qword_taint[0][0]  # First element of first taint entry
-    
-    return address, size
 
-def generate_config(selected_call, arg_choice, syscall_number):
-    # Get taint introduction PC (first non-library entry)
-    taint_backtrace = selected_call.get('taint_introduction_pc_backtrace', [])
-    taint_introduction_pc = get_taint_introduction_pc(taint_backtrace)
+class SyscallSelector:
+    """Main class for syscall selection and configuration generation."""
     
-    # Get syscall sink PC (first non-library entry)
-    backtrace = selected_call.get('backtrace', [])
-    syscall_sink_pc = get_syscall_sink_pc(backtrace)
+    def __init__(self, config_file: str = "syscall_config.json"):
+        self.config = SyscallConfig(config_file)
+        self.selected_syscall_name = ""
+        self.selected_argument_name = ""
     
-    # Get argument info
-    syscall_args = selected_call.get('syscall_args', [])
-    buffer_address, buffer_size = get_argument_info(syscall_args, arg_choice)
+    def load_trace_data(self, filename: str) -> List[Dict]:
+        """Load syscall trace data from JSON file."""
+        try:
+            with open(filename, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in file '{filename}': {e}")
+            sys.exit(1)
     
-    # Format buffer address properly
-    buffer_addr_hex = f"0x{buffer_address:X}" if buffer_address else "0x0"
+    def filter_tainted_syscalls(self, data: List[Dict]) -> List[Dict]:
+        """Filter syscalls to only include tainted ones that are in config."""
+        tainted_calls = []
+        seen_signatures = set()
+        skipped_count = 0
+        duplicate_count = 0
+        
+        for call in data:
+            if call.get('tainted', False):
+                syscall_name = call.get('syscall', 'unknown')
+                
+                # Only include syscalls in configuration
+                if self.config.is_supported(syscall_name):
+                    # Simple deduplication based on syscall name and args
+                    signature = f"{syscall_name}|{len(call.get('syscall_args', []))}"
+                    if signature not in seen_signatures:
+                        seen_signatures.add(signature)
+                        tainted_calls.append(call)
+                    else:
+                        duplicate_count += 1
+                else:
+                    skipped_count += 1
+        
+        if skipped_count > 0:
+            print(f"Skipped {skipped_count} tainted syscall(s) - not in configuration")
+        if duplicate_count > 0:
+            print(f"Removed {duplicate_count} duplicate tainted syscall(s)")
+        
+        return tainted_calls
     
-    # Determine argument number (0-based indexing for syscalls)
-    if isinstance(arg_choice, tuple) and len(arg_choice) == 2:
-        # For nested arguments like execve argv[N], use the main argument index (0-based)
-        argument_number = arg_choice[0] - 1
-    else:
-        # For regular arguments, convert from 1-based to 0-based
-        argument_number = arg_choice - 1
+    def display_tainted_syscalls(self, tainted_calls: List[Dict]):
+        """Display available tainted syscalls."""
+        if not tainted_calls:
+            print("\nNo tainted syscalls found in configuration.")
+            print(f"Supported syscalls: {self.config.get_supported_syscalls()}")
+            return
+        
+        print(f"\nTainted Syscalls Found:")
+        print("=" * 50)
+        
+        for i, call in enumerate(tainted_calls, 1):
+            syscall_name = call.get('syscall', 'unknown')
+            config_info = self.config.get_syscall_info(syscall_name)
+            
+            print(f"{i}. {syscall_name} (syscall #{config_info.get('syscall_number', 'unknown')})")
+            print(f"   Report: {call.get('report_num', 'N/A')}, PID: {call.get('pid', 'N/A')}")
+            
+            # Show first few backtrace frames
+            backtrace = call.get('backtrace', [])
+            print(f"   Backtrace:")
+            for j, frame in enumerate(backtrace[:3]):
+                lib_status = " (library)" if BacktraceAnalyzer.is_library_path(frame) else " (program)"
+                print(f"     {j+1}: {frame}{lib_status}")
+            if len(backtrace) > 3:
+                print(f"     ... and {len(backtrace) - 3} more frames")
+            print()
     
-    # Format the output
-    config_output = f"""
+    def select_syscall(self, tainted_calls: List[Dict]) -> Optional[Dict]:
+        """Let user select a syscall."""
+        while True:
+            try:
+                choice = int(input(f"Select a tainted syscall (1-{len(tainted_calls)}): "))
+                if 1 <= choice <= len(tainted_calls):
+                    return tainted_calls[choice - 1]
+                else:
+                    print(f"Please enter a number between 1 and {len(tainted_calls)}")
+            except ValueError:
+                print("Please enter a valid number")
+    
+    def select_argument(self, syscall_call: Dict) -> Optional[Tuple[int, Optional[int]]]:
+        """Select argument for the syscall. Returns (arg_index, sub_arg_index)."""
+        syscall_name = syscall_call.get('syscall', 'unknown')
+        syscall_args = syscall_call.get('syscall_args', [])
+        config_info = self.config.get_syscall_info(syscall_name)
+        
+        self.selected_syscall_name = syscall_name
+        
+        if not config_info:
+            print(f"Warning: No configuration found for {syscall_name}")
+            return self._select_generic_argument(syscall_args)
+        
+        # Handle special cases (like execve)
+        if config_info.get('special_handling', False):
+            return self._select_execve_argument(syscall_args, config_info)
+        else:
+            return self._select_regular_argument(syscall_args, config_info)
+    
+    def _select_generic_argument(self, syscall_args: List[Dict]) -> Optional[Tuple[int, None]]:
+        """Select argument for unsupported syscalls."""
+        tainted_choices = []
+        
+        print("Available tainted arguments:")
+        for i, arg in enumerate(syscall_args):
+            if TaintAnalyzer.has_taint_data(arg):
+                content_info, size_info = ArgumentDisplay.format_argument_info(arg, i, f"arg{i}")
+                print(f"  {i}: arg{i} ({arg.get('type', 'unknown')}){content_info}{size_info} [TAINTED]")
+                tainted_choices.append(i)
+        
+        if not tainted_choices:
+            print("No tainted arguments found!")
+            return None
+        
+        while True:
+            try:
+                choice = int(input(f"Select argument from {tainted_choices}: "))
+                if choice in tainted_choices:
+                    return (choice, None)
+                else:
+                    print(f"Please select from: {tainted_choices}")
+            except ValueError:
+                print("Please enter a valid number")
+    
+    def _select_regular_argument(self, syscall_args: List[Dict], config_info: Dict) -> Optional[Tuple[int, None]]:
+        """Select argument for regular syscalls."""
+        valid_args = config_info.get('valid_args', [])
+        arg_names = config_info.get('arg_names', [])
+        
+        print(f"\nSelected syscall: {self.selected_syscall_name}")
+        print("Available tainted arguments:")
+        
+        tainted_choices = []
+        
+        # Debug: show what we're working with
+        # print(f"DEBUG: valid_args from config: {valid_args}")
+        # print(f"DEBUG: total syscall_args: {len(syscall_args)}")
+        
+        # Check each valid argument - determine if config uses 0-based or 1-based indexing
+        for i, arg_index in enumerate(valid_args):
+            # Try both 0-based and 1-based indexing
+            actual_index = arg_index
+            if arg_index >= len(syscall_args) and arg_index > 0:
+                # Config might be 1-based, convert to 0-based
+                actual_index = arg_index - 1
+                # print(f"DEBUG: Converting {arg_index} to 0-based index {actual_index}")
+            
+            if actual_index < len(syscall_args):
+                arg = syscall_args[actual_index]
+                # print(f"DEBUG: Checking arg {actual_index}: type={arg.get('type')}")
+                
+                has_taint = TaintAnalyzer.has_taint_data(arg)
+                # print(f"DEBUG: Arg {actual_index} has_taint_data: {has_taint}")
+                
+                if arg.get('type') == 'VPTR':
+                    qword_taint = arg.get('qword_taint', [])
+                    buf_taint = arg.get('buf_taint', [])
+                    # print(f"DEBUG: VPTR qword_taint length: {len(qword_taint)}")
+                    # print(f"DEBUG: VPTR buf_taint length: {len(buf_taint)}")
+                    if buf_taint:
+                        print(f"DEBUG: First buf_taint entry: {buf_taint[0] if buf_taint else 'None'}")
+                
+                if has_taint:
+                    arg_name = arg_names[i] if i < len(arg_names) else f"arg{actual_index}"
+                    content_info, size_info = ArgumentDisplay.format_argument_info(arg, actual_index, arg_name)
+                    print(f"  {actual_index}: {arg_name} ({arg.get('type', 'unknown')}){content_info}{size_info} [TAINTED]")
+                    tainted_choices.append(actual_index)
+        
+        if not tainted_choices:
+            print("No tainted arguments found in valid argument list!")
+            return None
+        
+        while True:
+            try:
+                choice = int(input(f"Select argument from {tainted_choices}: "))
+                if choice in tainted_choices:
+                    # Find the argument name
+                    for i, arg_index in enumerate(valid_args):
+                        actual_index = arg_index if arg_index < len(syscall_args) else arg_index - 1
+                        if actual_index == choice:
+                            self.selected_argument_name = arg_names[i] if i < len(arg_names) else f"arg{choice}"
+                            break
+                    return (choice, None)  # Return the actual 0-based index
+                else:
+                    print(f"Please select from: {tainted_choices}")
+            except ValueError:
+                print("Please enter a valid number")
+    
+    def _select_execve_argument(self, syscall_args: List[Dict], config_info: Dict) -> Optional[Tuple[int, Optional[int]]]:
+        """Handle execve special case with nested arguments."""
+        nested_args = config_info.get('nested_args', {})
+        
+        print(f"\nExecutve Arguments:")
+        main_choices = []
+        
+        # Show main arguments that have taint data
+        for i, arg in enumerate(syscall_args):
+            if TaintAnalyzer.has_taint_data(arg):
+                arg_key = str(i)  # Config uses 0-based indexing
+                if arg_key in nested_args:
+                    nested_info = nested_args[arg_key]
+                    content_info, size_info = ArgumentDisplay.format_argument_info(arg, i, nested_info['description'])
+                    print(f"  {i}: {nested_info['description']} ({arg.get('type', 'unknown')}){content_info}{size_info} [TAINTED]")
+                    main_choices.append(i)
+        
+        if not main_choices:
+            print("No tainted arguments found!")
+            return None
+        
+        # Select main argument
+        while True:
+            try:
+                main_choice = int(input(f"Select main argument from {main_choices}: "))
+                if main_choice in main_choices:
+                    break
+                else:
+                    print(f"Please select from: {main_choices}")
+            except ValueError:
+                print("Please enter a valid number")
+        
+        # Check for sub-arguments
+        main_arg = syscall_args[main_choice]  # Already 0-based
+        if (str(main_choice) in nested_args and 
+            main_arg.get('type') == 'PPCHAR' and 
+            'pchars' in main_arg):
+            
+            nested_info = nested_args[str(main_choice)]
+            sub_args = nested_info.get('sub_args', {})
+            pchars = main_arg['pchars']
+            
+            print(f"\nSub-arguments for {nested_info['description']}:")
+            sub_choices = []
+            
+            for j, pchar in enumerate(pchars):
+                if str(j) in sub_args and TaintAnalyzer.has_taint_data(pchar):
+                    string_content = pchar.get('str', '')
+                    is_null = pchar.get('qword', 0) == 0
+                    if is_null:
+                        status = " (NULL)"
+                    else:
+                        status = f' = "{string_content}"'
+                    
+                    print(f"  {j}: {sub_args[str(j)]}{status} [TAINTED]")
+                    sub_choices.append(j)
+            
+            if sub_choices:
+                while True:
+                    try:
+                        sub_choice = int(input(f"Select sub-argument from {sub_choices}: "))
+                        if sub_choice in sub_choices:
+                            self.selected_argument_name = f"argv[{sub_choice}]"
+                            return (main_choice, sub_choice)  # Both already 0-based
+                        else:
+                            print(f"Please select from: {sub_choices}")
+                    except ValueError:
+                        print("Please enter a valid number")
+        
+        # No sub-arguments, return main argument
+        nested_info = nested_args.get(str(main_choice), {})
+        self.selected_argument_name = nested_info.get('description', f"arg{main_choice}")
+        return (main_choice, None)  # Already 0-based
+    
+    def get_argument_info(self, syscall_args: List[Dict], arg_choice: Tuple[int, Optional[int]]) -> Tuple[int, int]:
+        """Get address and size for the selected argument."""
+        main_arg_index, sub_arg_index = arg_choice
+        
+        # Handle nested arguments (like execve argv[N])
+        if sub_arg_index is not None:
+            main_arg = syscall_args[main_arg_index]
+            if main_arg.get('type') == 'PPCHAR' and 'pchars' in main_arg:
+                pchars = main_arg['pchars']
+                if sub_arg_index < len(pchars):
+                    sub_arg = pchars[sub_arg_index]
+                    if sub_arg.get('qword', 0) == 0:
+                        print(f"Warning: argv[{sub_arg_index}] appears to be null")
+                        return 0, 0
+                    
+                    address = TaintAnalyzer.get_taint_address(sub_arg)
+                    size = TaintAnalyzer.get_argument_size(sub_arg)
+                    return address, size
+            return 0, 0
+        
+        # Handle regular arguments
+        if main_arg_index < len(syscall_args):
+            arg = syscall_args[main_arg_index]
+            address = TaintAnalyzer.get_taint_address(arg)
+            size = TaintAnalyzer.get_argument_size(arg)
+            return address, size
+        
+        return 0, 0
+    
+    def generate_config(self, syscall_call: Dict, arg_choice: Tuple[int, Optional[int]]) -> str:
+        """Generate S2E configuration."""
+        syscall_name = syscall_call.get('syscall', 'unknown')
+        config_info = self.config.get_syscall_info(syscall_name)
+        syscall_number = config_info.get('syscall_number', 'unknown') if config_info else 'unknown'
+        
+        # Get PCs
+        taint_backtrace = syscall_call.get('taint_introduction_pc_backtrace', [])
+        taint_introduction_pc = BacktraceAnalyzer.get_pc_from_backtrace(taint_backtrace)
+        
+        backtrace = syscall_call.get('backtrace', [])
+        syscall_sink_pc = BacktraceAnalyzer.get_pc_from_backtrace(backtrace)
+        
+        # Get argument info
+        syscall_args = syscall_call.get('syscall_args', [])
+        buffer_address, buffer_size = self.get_argument_info(syscall_args, arg_choice)
+        
+        # Format output
+        main_arg_index, sub_arg_index = arg_choice
+        
+        config_output = f"""
 pluginsConfig.traceanalysis = {{
     taint_introduction_pc = {taint_introduction_pc or '0x0'},
-    buffer_to_symbolic = {buffer_addr_hex},
-    buffer_to_symbolic_size = {buffer_size or 0},
+    buffer_to_symbolic = 0x{buffer_address:X},
+    buffer_to_symbolic_size = {buffer_size},
     syscall_sink_pc = {syscall_sink_pc or '0x0'},
-    target_syscall = {syscall_number if syscall_number is not None else 'unknown'},
-    command = {argument_number},
+    target_syscall = {syscall_number}, -- {syscall_name}
+    command = {main_arg_index}, -- {self.selected_argument_name}
 }}
 """
+        return config_output
     
-    return config_output
+    def save_config(self, config_output: str, template_file: str = "s2e-config.template.lua", 
+                   output_file: str = "s2e-config.lua"):
+        """Save configuration to file."""
+        try:
+            with open(template_file, 'r') as tf:
+                template_content = tf.read()
+        except IOError as e:
+            print(f"Error reading template file {template_file}: {e}")
+            return
+        
+        try:
+            with open(output_file, 'w') as of:
+                of.write(template_content)
+                of.write('\n')
+                of.write(config_output)
+                of.write('\n')
+            print(f"\nConfiguration saved to {output_file}")
+        except IOError as e:
+            print(f"Error writing to output file {output_file}: {e}")
+    
+    def run(self, trace_file: str):
+        """Main execution flow."""
+        # Load and filter data
+        data = self.load_trace_data(trace_file)
+        tainted_calls = self.filter_tainted_syscalls(data)
+        
+        if not tainted_calls:
+            print("No tainted syscalls found in configuration.")
+            return
+        
+        # Display and select
+        self.display_tainted_syscalls(tainted_calls)
+        selected_call = self.select_syscall(tainted_calls)
+        
+        if not selected_call:
+            return
+        
+        arg_choice = self.select_argument(selected_call)
+        if not arg_choice:
+            print("No valid arguments selected.")
+            return
+        
+        # Generate and save config
+        config = self.generate_config(selected_call, arg_choice)
+        
+        print("\nGenerated Configuration:")
+        print("=" * 50)
+        print(config)
+        
+        self.save_config(config)
 
-def save_config_to_file(config_output, template_file="s2e-config.template.lua", output_file="s2e-config.lua"):
-    try:
-        with open(template_file, 'r') as tf:
-            template_content = tf.read()
-    except IOError as e:
-        print(f"Error reading from template file {template_file}: {e}")
-        return
-
-    try:
-        with open(output_file, 'w') as of:
-            of.write(template_content)
-            of.write('\n')  # Separate from template
-            of.write(config_output)
-            of.write('\n')  # Extra newline
-        print(f"\nConfiguration saved to {output_file}")
-    except IOError as e:
-        print(f"Error writing to output file {output_file}: {e}")
 
 def main():
+    """Main entry point."""
     if len(sys.argv) < 2 or len(sys.argv) > 3:
-        print("Usage: python tainted_syscall_analyzer.py <json_file> [config_file]")
-        print("  json_file: The syscall trace JSON file")
+        print("Usage: python syscall_selector.py <trace_file> [config_file]")
+        print("  trace_file: The syscall trace JSON file")
         print("  config_file: Optional syscall configuration file (default: syscall_config.json)")
         sys.exit(1)
     
-    filename = sys.argv[1]
+    trace_file = sys.argv[1]
     config_file = sys.argv[2] if len(sys.argv) == 3 else "syscall_config.json"
     
-    # Load syscall configuration
-    load_syscall_config(config_file)
-    
-    # Load JSON data
-    data = load_json_file(filename)
-    
-    # Filter tainted syscalls (only those in config file)
-    tainted_calls = filter_tainted_syscalls(data)
-    
-    if not tainted_calls:
-        print("No tainted syscalls found that are defined in the configuration file.")
-        print(f"Available syscalls in config: {list(SYSCALL_CONFIG.keys())}")
-        sys.exit(0)
-    
-    # Display tainted syscalls
-    display_tainted_syscalls(tainted_calls)
-    
-    # Let user select syscall and argument
-    selected_call, arg_choice, syscall_number = select_syscall_and_argument(tainted_calls)
-    
-    # Check if selection was successful
-    if selected_call is None:
-        print("No valid tainted arguments available for configuration generation.")
-        sys.exit(0)
-    
-    # Generate configuration
-    config = generate_config(selected_call, arg_choice, syscall_number)
-    
-    print("\nGenerated Configuration:")
-    print("=" * 50)
-    print(config)
-    
-    # Save to file
-    save_config_to_file(config)
+    selector = SyscallSelector(config_file)
+    selector.run(trace_file)
+
 
 if __name__ == "__main__":
     main()

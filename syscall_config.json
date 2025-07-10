@@ -1,104 +1,77 @@
 {
-    "setresuid": {
-        "syscall_number": 117,
-        "valid_args": [1, 2, 3],
-        "arg_names": ["ruid", "euid", "suid"],
-        "special_handling": false
-    },
     "execve": {
         "syscall_number": 59,
-        "valid_args": [1, 2, 3],
-        "arg_names": ["pathname", "argv", "envp"],
+        "valid_args": [
+            0,
+            1,
+            2
+        ],
+        "arg_names": [
+            "pathname",
+            "argv",
+            "envp"
+        ],
         "special_handling": true,
         "nested_args": {
-            "1": {
+            "0": {
                 "type": "VPTR",
                 "description": "pathname string"
             },
-            "2": {
+            "1": {
                 "type": "PPCHAR",
                 "description": "argv array",
                 "sub_args": {
-                    "0": "argv[0] - program name",
-                    "1": "argv[1] - first argument", 
-                    "2": "argv[2] - second argument",
-                    "3": "argv[3] - third argument"
-                }
-            },
-            "3": {
-                "type": "PPCHAR", 
-                "description": "envp array",
-                "sub_args": {
-                    "0": "envp[0] - first environment variable",
-                    "1": "envp[1] - second environment variable"
+                    "1": "argv[1] - first argument"
                 }
             }
         }
     },
-    "exit": {
-        "syscall_number": 231,
-        "valid_args": [1],
-        "arg_names": ["status"],
+    "mmap": {
+        "syscall_number": 9,
+        "valid_args": [
+            2,
+            3
+        ],
+        "arg_names": [
+            "prot",
+            "flags"
+        ],
         "special_handling": false
     },
     "mprotect": {
         "syscall_number": 10,
-        "valid_args": [1, 2, 3],
-        "arg_names": ["addr", "len", "prot"],
-        "special_handling": false
-    },
-    "newfstat": {
-        "syscall_number": 262,
-        "valid_args": [1, 2],
-        "arg_names": ["fd", "statbuf"],
-        "special_handling": false
-    },
-    "bind": {
-        "syscall_number": 49,
-        "valid_args": [1, 2, 3],
-        "arg_names": ["sockfd", "addr", "addrlen"],
-        "special_handling": false
-    },
-    "connect": {
-        "syscall_number": 42,
-        "valid_args": [1, 2, 3],
-        "arg_names": ["sockfd", "addr", "addrlen"],
-        "special_handling": false
-    },
-    "mmap": {
-        "syscall_number": 9,
-        "valid_args": [1, 2, 3, 4, 5, 6],
-        "arg_names": ["addr", "length", "prot", "flags", "fd", "offset"],
-        "special_handling": false
-    },
-    "pwrite64": {
-        "syscall_number": 18,
-        "valid_args": [1, 2, 3, 4],
-        "arg_names": ["fd", "buf", "count", "offset"],
-        "special_handling": false
-    },
-    "write": {
-        "syscall_number": 1,
-        "valid_args": [1, 2, 3],
-        "arg_names": ["fd", "buf", "count"],
-        "special_handling": false
-    },
-    "writev": {
-        "syscall_number": 20,
-        "valid_args": [1, 2, 3],
-        "arg_names": ["fd", "iov", "iovcnt"],
+        "valid_args": [
+            2
+        ],
+        "arg_names": [
+            "prot"
+        ],
         "special_handling": false
     },
     "openat": {
         "syscall_number": 257,
-        "valid_args": [1, 2, 3, 4],
-        "arg_names": ["dirfd", "pathname", "flags", "mode"],
+        "valid_args": [
+            1,
+            2,
+            3
+        ],
+        "arg_names": [
+            "pathname",
+            "flags",
+            "mode"
+        ],
         "special_handling": false
     },
     "creat": {
         "syscall_number": 85,
-        "valid_args": [1, 2],
-        "arg_names": ["pathname", "mode"],
+        "valid_args": [
+            0,
+            1
+        ],
+        "arg_names": [
+            "pathname",
+            "mode"
+        ],
         "special_handling": false
     }
 }
