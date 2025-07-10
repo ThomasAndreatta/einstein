@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 // Default port (can be overridden with -p flag)
 #define DEFAULT_PORT 8080
@@ -61,17 +62,17 @@ int mmap_flags = MAP_PRIVATE;
 int mmap_fd;
 off_t mmap_offset = 0;
 
-char filename[19] = "/tmp/test_file.txt";
-mode_t mode = S_IRUSR;
+char creat_filename[19] = "/tmp/test_file.txt";
+mode_t creat_mode = S_IRUSR;
 void trigger_creat()
 {
     // PRINT_PC("trigger_creat");
 
     /* Make sure that no file gets created in /bin */
-    if(my_str_cmp(filename,"/bin",4))
+    if(my_str_cmp(creat_filename,"/bin",4))
         goto skip;
 
-    fd = creat(filename, mode);
+    fd = creat(creat_filename, creat_mode);
     skip:
         fd = 0;
 }
@@ -87,6 +88,83 @@ void trigger_mmap()
          mmap_fd, mmap_offset);
 }
 
+
+char openat_path_buffer[25] = "very_very_safe_file.txt";
+int openat_flags = O_CREAT;
+mode_t openat_mode = 0644;
+int dirfd;
+void trigger_openat(){
+
+    /* Part of the setup is in main */
+    
+
+    fd = openat(dirfd, openat_path_buffer, openat_flags, openat_mode);
+    if (fd == -1)
+    {
+        perror("openat failed");
+        close(dirfd);
+        exit(EXIT_FAILURE);
+    }
+
+
+    printf("Openat completed\n");
+    // Cleanup
+    close(fd);
+    close(dirfd);
+
+}
+
+int mprotect_prot = PROT_READ;
+#define BLOCK_WRITE
+void trigger_mprotect(){
+    void *page = mmap(NULL, 0x1000, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+#ifdef BLOCK_WRITE
+    if ((mprotect_prot & PROT_WRITE) == PROT_WRITE)
+    {
+        return;
+    }
+#endif
+
+#ifdef BLOCK_EXEC
+    if (params.prot & PROT_EXEC)
+    {
+        return;
+    }
+#endif
+
+#ifdef BLOCK_RWX
+    if ((params.prot & (PROT_READ | PROT_WRITE | PROT_EXEC)) ==
+        (PROT_READ | PROT_WRITE | PROT_EXEC))
+    {
+        return;
+    }
+#endif
+    mprotect((void *)page, 0x1000, mprotect_prot);
+
+}
+
+char execve_pathname[16] = "/bin/cat";
+char execve_arg1_buf[16] = "/etc/passwd";
+char *execve_args[] = {execve_pathname, execve_arg1_buf, NULL};
+char *execve_env[] = {"PATH=/bin:/usr/bin", NULL};
+void trigger_execve(){
+    if(my_str_cmp(execve_pathname,"/root",5))
+        goto skip;
+
+    simple_useless_function(10);
+
+    // pid_t pid = fork();
+    // if (pid == 0) {
+        execve(execve_pathname, execve_args, execve_env);
+        _exit(1);
+    // } else if (pid > 0)
+    //     waitpid(pid, NULL, 0);
+
+    skip:
+        return;
+}
+
 void handle_execute(char *token)
 {
 
@@ -94,6 +172,14 @@ void handle_execute(char *token)
         trigger_creat();
     else if (strcmp(token, "mmap") == 0)
         trigger_mmap();
+    else if (strcmp(token, "openat") == 0)
+        trigger_openat();
+    else if (strcmp(token, "mprotect") == 0)
+        trigger_mprotect();
+    else if (strcmp(token, "execve") == 0)
+        trigger_execve();
+    else if (strcmp(token, "test") == 0)
+        trigger_openat();
 }
 
 void handle_client(int client_socket, int is_uds)
@@ -149,6 +235,22 @@ int main(int argc, char **argv)
     if ((tcp_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
         perror("TCP socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Openat setup part */
+    // Create a directory for testing
+    if (mkdir("/tmp/openat_test", 0755) == -1 && errno != EEXIST)
+    {
+        perror("mkdir failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Open the directory
+    dirfd = open("/tmp/openat_test", O_RDONLY | O_DIRECTORY);
+    if (dirfd == -1)
+    {
+        perror("open directory failed");
         exit(EXIT_FAILURE);
     }
 
