@@ -69,11 +69,4 @@ extern bool _einstein_use_log;
 
 extern string application_name;
 
-extern bool _einstein_track_taint_pc;
-extern ADDRINT _einstein_last_taint_pc;
-void einstein_enable_taint_pc_tracking();
-void einstein_capture_taint_pc(ADDRINT pc);
-extern bool _einstein_waiting_for_main_pc;
-void einstein_capture_main_program_pc(ADDRINT pc);
-void einstein_setup_main_pc_capture_optimized();
 #endif

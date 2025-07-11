@@ -13,7 +13,7 @@ ARGS=$@
 cd ${APP}
 
 echo "Starting ${APP}"
-RUN_EINSTEIN=1 USE_LOG_DIR=1 V=1 LOG_SUB_DIR=einstein-simple setarch x86_64 -R ./serverctl restart ${ARGS}
+RUN_EINSTEIN=1 USE_LOG_DIR=1 V=1 LOG_SUB_DIR=einstein-simple ./serverctl restart ${ARGS}
 echo "[WAIT] 8s"
 sleep 8
 

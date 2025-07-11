@@ -73,5 +73,17 @@
             "mode"
         ],
         "special_handling": false
+    },
+    "write": {
+        "syscall_number": 20,
+        "valid_args": [
+            0,
+            2
+        ],
+        "arg_names": [
+            "fd",
+            "size"
+        ],
+        "special_handling": false
     }
 }

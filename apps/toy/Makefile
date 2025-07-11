@@ -1,7 +1,7 @@
 # Compiler and flags
 CC = gcc
 CFLAGS = -Wall -Wextra -g -fPIC
-LDFLAGS = -pie -Wl,-pie -pthread
+LDFLAGS = -pie -Wl,-pie
 
 SERVER = server
 SERVER_SRC = server.c

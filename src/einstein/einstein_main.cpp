@@ -10,7 +10,7 @@
 // =====================================================================
 
 PinLog *_einstein_log;
-bool _einstein_use_log = true;
+bool _einstein_use_log = false;
 
 // =====================================================================
 // Command line switches

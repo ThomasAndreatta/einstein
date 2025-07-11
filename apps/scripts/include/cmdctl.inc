@@ -474,6 +474,18 @@ function cmdctl_server_udscmd {
     local file=$CMDDIR/$1.cmd.$PID
     shift || return 1
     echo $* | nc -U $file
+
+    local taintall_file="/tmp/taintall"
+    touch "$taintall_file"
+
+    # Debug output
+    echo "DEBUG: cmdctl_server_udscmd called with:" > /tmp/einstein
+    echo "  CMDDIR: $CMDDIR">> /tmp/einstein
+    echo "  PID: $PID">> /tmp/einstein
+    echo "  Socket file: $file">> /tmp/einstein
+    echo "  Command to send: $*">> /tmp/einstein
+    echo "  File exists: $([ -e "$file" ] && echo "YES" || echo "NO")">> /tmp/einstein
+    
 }
 
 function cmdctl_server_port {

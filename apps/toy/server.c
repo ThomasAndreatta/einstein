@@ -55,13 +55,6 @@ char *args[3] = {NULL, NULL, NULL};
 
 volatile uid_t euid = 1024;
 
-void *mmap_addr = NULL;
-size_t mmap_length = 4096;
-int mmap_prot = PROT_READ;
-int mmap_flags = MAP_PRIVATE;
-int mmap_fd;
-off_t mmap_offset = 0;
-
 char creat_filename[19] = "/tmp/test_file.txt";
 mode_t creat_mode = S_IRUSR;
 void trigger_creat()
@@ -77,9 +70,15 @@ void trigger_creat()
         fd = 0;
 }
 
+void *mmap_addr = NULL;
+size_t mmap_length = 4096;
+int mmap_prot = PROT_READ;
+int mmap_flags = MAP_PRIVATE;
+int mmap_fd;
+off_t mmap_offset = 0;
 void trigger_mmap()
 {
-    // PRINT_PC("trigger_mmap");
+    PRINT_PC("trigger_mmap");
     simple_useless_function(mmap_length);
     simple_useless_function(mmap_prot);
     simple_useless_function(mmap_flags);
@@ -87,7 +86,6 @@ void trigger_mmap()
     mmap(mmap_addr, mmap_length, mmap_prot, mmap_flags,
          mmap_fd, mmap_offset);
 }
-
 
 char openat_path_buffer[25] = "very_very_safe_file.txt";
 int openat_flags = O_CREAT;
@@ -157,13 +155,14 @@ void trigger_execve(){
     // pid_t pid = fork();
     // if (pid == 0) {
         execve(execve_pathname, execve_args, execve_env);
-        _exit(1);
+    //     _exit(1);
     // } else if (pid > 0)
     //     waitpid(pid, NULL, 0);
 
     skip:
         return;
 }
+
 
 void handle_execute(char *token)
 {
@@ -179,7 +178,7 @@ void handle_execute(char *token)
     else if (strcmp(token, "execve") == 0)
         trigger_execve();
     else if (strcmp(token, "test") == 0)
-        trigger_openat();
+        trigger_mmap();
 }
 
 void handle_client(int client_socket, int is_uds)

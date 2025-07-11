@@ -23,18 +23,6 @@ util_cmdsvr_conf_t dbt_cmdsvr_conf_buff;
 __attribute__((noinline)) void __libdft_cmd(int cmd, void *arg1)
 {
     assert(cmd >= 0 && cmd < __NUM_DBT_CMDSVR_CMDS);
-
-    switch (cmd)
-    {
-    case DBT_CMDSVR_CMD_TAINTALL:
-        _UTIL_PRINTF("\n================\n");
-        _UTIL_PRINTF("TaintAll command executed - About to singnal to %d\n",getpid());
-        _UTIL_PRINTF("================\n");
-         kill(getpid(), SIGUSR1);
-        break;
-    default:
-        break;
-    }
     asm("");
 }
 

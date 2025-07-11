@@ -116,7 +116,7 @@ void einstein_rewrite_check(syscall_ctx_t *ctx) {
     einstein_rewrite * this_rewrite = &rewrites_list[i];
     if (!this_rewrite->rewrite_performed) continue;
     if (this_rewrite->syscall == this_syscall && bt_equals(ctx->pinctx, this_rewrite->backtrace)) {
-      EINSTEIN_LOG("%s:%d: Covered the syscall/backtrace of rewrite %s\n", __FILE__, __LINE__, this_rewrite->to_str().c_str());
+      //EINSTEIN_LOG("%s:%d: Covered the syscall/backtrace of rewrite %s\n", __FILE__, __LINE__, this_rewrite->to_str().c_str());
       if (einstein_syscalls[ctx->nr].rewrite_check(ctx, this_rewrite->syscall_arg_num)) {
         this_rewrite->rewrite_verified = true;
         EINSTEIN_LOG("%s:%d: Confirmed rewrite %lu! (Rewrite: %s)\n", __FILE__, __LINE__, i, this_rewrite->to_str().c_str());
