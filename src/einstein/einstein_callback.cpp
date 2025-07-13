@@ -238,7 +238,6 @@ string get_pin_offset_info(CONTEXT *ctx)
 // =====================================================================
 
 
-// Modified einstein_pre_syscall_hook - fix the taintall logic
 void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
 {
     fix_syscall_args(ctx);
@@ -254,25 +253,13 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     if (bt_str(ctx->pinctx, true, true).find("libdbt-cmdsvr") != string::npos)
         return;
 
-    // Check if taintall file exists and we haven't triggered yet
+    // Check if taintall was triggered and we haven't captured backtrace yet
     if (_einstein_taintall_triggered && einstein_check_taintall_file())
     {
-        EINSTEIN_LOG("Taintall file detected - waiting for next main program PC\n");
-        _einstein_waiting_for_main_pc_after_recvfrom = true;  // Set the flag to wait for main PC
-        _einstein_taintall_triggered = false;  // Don't check file again
-    }
+        _einstein_last_recvfrom_backtrace = bt_str_vanilla(ctx->pinctx, true, false);
+        EINSTEIN_LOG("PC tracking triggered by taintall signal\n");
+        _einstein_taintall_triggered = false;
 
-    // Check if we should capture backtrace from main executable
-    // Only capture if we're waiting AND this syscall comes from main executable
-    if (_einstein_waiting_for_main_pc_after_recvfrom && _einstein_last_recvfrom_backtrace == "")
-    {
-        // Get current instruction pointer
-        ADDRINT current_ip = PIN_GetContextReg(ctx->pinctx, REG_INST_PTR);
-        
-           _einstein_last_recvfrom_backtrace = bt_str_vanilla(ctx->pinctx, true, false);
-            EINSTEIN_LOG("PC tracking captured from main executable at IP: 0x%lx\n", current_ip);
-            _einstein_waiting_for_main_pc_after_recvfrom = false;  // Stop waiting
-      
     }
 
     // If we're in 'rewrite' mode, only check for this
@@ -282,7 +269,8 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
         return;
     }
 
-    // Add PC field for tainted syscalls (only if we captured PC from main executable)
+
+    // Add PC field for tainted syscalls (only if we captured PC after recvfrom)
     string taint_pc_field = "";
     if (!_einstein_taintall_triggered && _einstein_last_recvfrom_backtrace != "")
     {
@@ -293,7 +281,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
         taint_pc_field = "\"taint_introduction_pc_backtrace\": [], ";
     }
 
-    // Rest of the function remains the same...
     // If the args are untainted AND the syscall nr is untainted, this is an UNTAINTED syscall
     if (!einstein_syscalls[ctx->nr].arg_is_tainted(ctx) && tagqarr_is_empty(ctx->nr_taint))
     {
@@ -364,6 +351,7 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     }
     inc_report_num();
 }
+
 void einstein_post_fd_creator_hook(THREADID tid, syscall_ctx_t *ctx)
 {
     sysexit_save_default_handling(tid); // If syscall succeeded, clear taint of any changed args
