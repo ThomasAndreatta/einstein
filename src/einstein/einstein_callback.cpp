@@ -82,14 +82,10 @@ bool syscall_covered(syscall_ctx_t *ctx)
 // PC Tracking
 // =====================================================================
 
-// Global variables for PC tracking
-bool _einstein_waiting_for_main_pc_after_recvfrom = false;
 ADDRINT _einstein_last_taint_pc = 0;
-static ADDRINT _main_img_low = 0;
-static ADDRINT _main_img_high = 0;
-static bool _main_img_bounds_set = false;
 static string _einstein_last_recvfrom_backtrace = "";
 static std::string _einstein_taintall_file;
+bool _einstein_save_taint = true;
 
 void einstein_init_taintall_file() {
     char filepath[256];
@@ -97,71 +93,26 @@ void einstein_init_taintall_file() {
     _einstein_taintall_file = std::string(filepath);
     
     // Remove the file if it exists from a previous run
-    // unlink(_einstein_taintall_file.c_str());
+    unlink(_einstein_taintall_file.c_str());
     
     EINSTEIN_LOG("Taintall trigger file: %s\n", _einstein_taintall_file.c_str());
 }
 
-bool einstein_check_taintall_file() {
+void einstein_check_taintall_file() {
     struct stat st;
     if (stat(_einstein_taintall_file.c_str(), &st) == 0) {
-        // File exists, taintall was triggered
-        // Optionally remove the file so it's only triggered once
-        // unlink(_einstein_taintall_file.c_str());
-        return true;
-    }
-    return false;
-}
-
-// Capture the next main program PC (only when waiting after recvfrom)
-void einstein_capture_main_program_pc_after_recvfrom(ADDRINT pc)
-{
-    if (_einstein_waiting_for_main_pc_after_recvfrom && _einstein_last_taint_pc == 0)
-    {
-        _einstein_last_taint_pc = pc;
-        _einstein_waiting_for_main_pc_after_recvfrom = false;
+        /* 
+         * 1. Einstein starts
+         *      It tracks all the syscalls 
+         * 2. simple-test.sh sends taintall
+         *      /tmp/taintall created
+         * 3. Einstein stops saving syscalls
+         *      the last saved was just prior `taintall` => the quiescent state
+        */
+        unlink(_einstein_taintall_file.c_str());
+        _einstein_save_taint = false;
     }
 }
-
-// Image load callback - captures main executable bounds
-VOID einstein_image_load_callback(IMG img, VOID *v)
-{
-    if (IMG_IsMainExecutable(img))
-    {
-        _main_img_low = IMG_LowAddress(img);
-        _main_img_high = IMG_HighAddress(img);
-        _main_img_bounds_set = true;
-
-        EINSTEIN_LOG("Main executable loaded: %s\n", IMG_Name(img).c_str());
-        EINSTEIN_LOG("Address range: %p - %p\n", (void *)_main_img_low, (void *)_main_img_high);
-    }
-}
-
-// Instruction callback - only captures PC when waiting after recvfrom AND in main program
-VOID einstein_instruction_callback(INS ins, VOID *v)
-{
-    if (_main_img_bounds_set)
-    {
-        ADDRINT pc = INS_Address(ins);
-
-        // Only instrument instructions in main executable
-        if (pc >= _main_img_low && pc <= _main_img_high)
-        {
-            INS_InsertCall(ins, IPOINT_BEFORE,
-                           (AFUNPTR)einstein_capture_main_program_pc_after_recvfrom,
-                           IARG_INST_PTR, IARG_END);
-        }
-    }
-}
-
-// Setup PC capture instrumentation
-void einstein_setup_pc_capture()
-{
-    IMG_AddInstrumentFunction(einstein_image_load_callback, 0);
-    INS_AddInstrumentFunction(einstein_instruction_callback, 0);
-    EINSTEIN_LOG("PC capture instrumentation setup complete\n");
-}
-
 
 string bt_str_vanilla(CONTEXT *ctx, bool include_module_names, bool include_addresses)
 {
@@ -176,26 +127,16 @@ string bt_str_vanilla(CONTEXT *ctx, bool include_module_names, bool include_addr
         return original_bt;
     }
 
+    /* Used to do translation here but no more. */
     return "SMTH went wrong!";
 }
 
-#ifndef __NR_recvfrom
-#define __NR_recvfrom 45
-#endif
-bool _einstein_taintall_triggered = true;
 
-void einstein_taintall_signal_handler(int sig)
-{
-    EINSTEIN_LOG("FIND ME signal received %d\n",sig);
 
-    if (sig == SIGUSR1)
-    {
-        EINSTEIN_LOG("FIND ME\n");
-        _einstein_taintall_triggered = false;
-    }
-}
-
-/* Get PIN base address (not used but still in the report) */
+/* Deprecated.
+ * Keeping it cause it has the check on IMG and might need it later
+ * XXX remove later tho
+ */
 string get_pin_offset_info(CONTEXT *ctx)
 {
     string offset_info = "";
@@ -253,13 +194,15 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     if (bt_str(ctx->pinctx, true, true).find("libdbt-cmdsvr") != string::npos)
         return;
 
-    // Check if taintall was triggered and we haven't captured backtrace yet
-    if (_einstein_taintall_triggered && einstein_check_taintall_file())
+    /*
+     * I feel like this should have some checks to check if PC is in IMG bound
+     * but ATM looks like its working(?)
+     */
+    if (_einstein_save_taint)
     {
         _einstein_last_recvfrom_backtrace = bt_str_vanilla(ctx->pinctx, true, false);
         EINSTEIN_LOG("PC tracking triggered by taintall signal\n");
-        _einstein_taintall_triggered = false;
-
+        einstein_check_taintall_file();
     }
 
     // If we're in 'rewrite' mode, only check for this
@@ -270,16 +213,13 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     }
 
 
-    // Add PC field for tainted syscalls (only if we captured PC after recvfrom)
-    string taint_pc_field = "";
-    if (!_einstein_taintall_triggered && _einstein_last_recvfrom_backtrace != "")
-    {
+    // Add PC field
+    string taint_pc_field = "\"taint_introduction_pc_backtrace\": [], ";
+    
+    // if (!_einstein_save_taint && _einstein_last_recvfrom_backtrace != "")
+    if (!_einstein_save_taint)
         taint_pc_field = "\"taint_introduction_pc_backtrace\": " + _einstein_last_recvfrom_backtrace + ", ";
-    }
-    else
-    {
-        taint_pc_field = "\"taint_introduction_pc_backtrace\": [], ";
-    }
+        
 
     // If the args are untainted AND the syscall nr is untainted, this is an UNTAINTED syscall
     if (!einstein_syscalls[ctx->nr].arg_is_tainted(ctx) && tagqarr_is_empty(ctx->nr_taint))
@@ -296,7 +236,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                          "\"application_corepath\": \"\", "
                          "\"application_corenum\": 0, "
                          "%s" // taint_pc_field
-                         "%s"
                          "\"backtrace\": %s, "
                          "\"syscall_nr_taint\": [], "
                          "\"syscall_args\": []"
@@ -306,7 +245,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                          PIN_GetPid(), getppid(), PIN_GetTid(), PIN_GetParentTid(),
                          str_replace(application_name, "\"", "\\\"").c_str(),
                          taint_pc_field.c_str(),
-                         get_pin_offset_info(ctx->pinctx).c_str(),
                          bt_str(ctx->pinctx, true, false).c_str());
             inc_report_num();
         }
@@ -323,7 +261,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                  "\"application_corepath\": \"%s\", "
                  "\"application_corenum\": %d, "
                  "%s" // taint_pc_field
-                 "%s"
                  "\"backtrace\": %s, "
                  "\"syscall_nr_taint\": %s, "
                  "\"syscall_args\": %s"
@@ -336,7 +273,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                  str_replace(memtaint_get_snapshot_path(), "\"", "\\\"").c_str(),
                  memtaint_get_snapshot_num(),
                  taint_pc_field.c_str(),
-                 get_pin_offset_info(ctx->pinctx).c_str(),
                  bt_str(ctx->pinctx, true, false).c_str(),
                  tagqarr_sprint(ctx->nr_taint).c_str(),
                  einstein_syscalls[ctx->nr].get_details(ctx).c_str());
@@ -408,9 +344,6 @@ void callbacks_einstein(void)
 {
     einstein_syscalls_init();
 
-    // Setup PC capture instrumentation (needed for main program bounds checking)
-    einstein_setup_pc_capture();
-    // signal(SIGUSR1, einstein_taintall_signal_handler);
     einstein_init_taintall_file();
     for (unsigned i = 0; i < SYSCALL_MAX; i++)
     {
