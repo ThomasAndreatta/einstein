@@ -75,7 +75,7 @@
         "special_handling": false
     },
     "write": {
-        "syscall_number": 20,
+        "syscall_number": 1,
         "valid_args": [
             0,
             2
