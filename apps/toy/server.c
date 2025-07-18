@@ -152,12 +152,13 @@ void trigger_execve(){
 
     simple_useless_function(10);
 
-    // pid_t pid = fork();
-    // if (pid == 0) {
+    pid_t pid = fork();
+    if (pid == 0) {
         execve(execve_pathname, execve_args, execve_env);
-    //     _exit(1);
-    // } else if (pid > 0)
-    //     waitpid(pid, NULL, 0);
+        _exit(1);
+    }
+    else if (pid > 0)
+        waitpid(pid, NULL, 0);
 
     skip:
         return;

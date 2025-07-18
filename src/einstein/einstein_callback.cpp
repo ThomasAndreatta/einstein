@@ -5,6 +5,7 @@
 #include <regex>
 #include <sstream>
 #include <sys/stat.h>
+#include <filesystem>
 // =====================================================================
 // Global variables
 // =====================================================================
@@ -109,7 +110,7 @@ void einstein_check_taintall_file() {
          * 3. Einstein stops saving syscalls
          *      the last saved was just prior `taintall` => the quiescent state
         */
-        unlink(_einstein_taintall_file.c_str());
+        remove(_einstein_taintall_file.c_str());
         _einstein_save_taint = false;
     }
 }
