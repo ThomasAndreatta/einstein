@@ -29,10 +29,12 @@
     "mmap": {
         "syscall_number": 9,
         "valid_args": [
+            1,
             2,
             3
         ],
         "arg_names": [
+            "size",
             "prot",
             "flags"
         ],
@@ -78,10 +80,12 @@
         "syscall_number": 1,
         "valid_args": [
             0,
+            1,
             2
         ],
         "arg_names": [
             "fd",
+            "buffer",
             "size"
         ],
         "special_handling": false

@@ -53,36 +53,51 @@ class TaintAnalyzer:
         """Check if an argument has any taint data."""
         arg_type = arg.get('type', 'unknown')
         
+        def has_valid_taint_entries(taint_data):
+            """Helper function to check if taint data has valid entries."""
+            if not taint_data:
+                return False
+            
+            for taint_entry in taint_data:
+                if taint_entry == "FULL":
+                    return True  # "FULL" indicates tainted data
+                elif isinstance(taint_entry, list) and len(taint_entry) > 0:
+                    return True  # Non-empty list indicates tainted data
+                elif isinstance(taint_entry, int):
+                    return True  # Direct integer value indicates tainted data
+            
+            return False
+        
         if arg_type == 'QWORD':
             qword_taint = arg.get('qword_taint', [])
-            return qword_taint and any(taint_list for taint_list in qword_taint if taint_list)
+            return has_valid_taint_entries(qword_taint)
         
         elif arg_type == 'DWORD':
             dword_taint = arg.get('dword_taint', [])
-            return dword_taint and any(taint_list for taint_list in dword_taint if taint_list)
+            return has_valid_taint_entries(dword_taint)
         
         elif arg_type == 'WORD':
             word_taint = arg.get('word_taint', [])
-            return word_taint and any(taint_list for taint_list in word_taint if taint_list)
+            return has_valid_taint_entries(word_taint)
         
         elif arg_type == 'BYTE':
             byte_taint = arg.get('byte_taint', [])
-            return byte_taint and any(taint_list for taint_list in byte_taint if taint_list)
+            return has_valid_taint_entries(byte_taint)
         
         elif arg_type == 'VPTR':
             # Check both qword_taint (pointer taint) and buf_taint (buffer content taint)
             qword_taint = arg.get('qword_taint', [])
             buf_taint = arg.get('buf_taint', [])
             
-            has_qword_taint = qword_taint and any(taint_list for taint_list in qword_taint if taint_list)
-            has_buf_taint = buf_taint and any(taint_list for taint_list in buf_taint if taint_list)
+            has_qword_taint = has_valid_taint_entries(qword_taint)
+            has_buf_taint = has_valid_taint_entries(buf_taint)
             
             return has_qword_taint or has_buf_taint
         
         elif arg_type == 'PPCHAR':
             # Check qword_taint and nested pchars
             qword_taint = arg.get('qword_taint', [])
-            has_qword_taint = qword_taint and any(taint_list for taint_list in qword_taint if taint_list)
+            has_qword_taint = has_valid_taint_entries(qword_taint)
             
             # Check nested pchars
             pchars = arg.get('pchars', [])
@@ -97,50 +112,60 @@ class TaintAnalyzer:
         """Extract the taint address from an argument."""
         arg_type = arg.get('type', 'unknown')
         
+        def find_valid_address_in_taint(taint_data):
+            """Helper function to find first valid numeric address in taint data."""
+            if not taint_data:
+                return None
+            
+            for taint_entry in taint_data:
+                if isinstance(taint_entry, list) and len(taint_entry) > 0:
+                    # Found a list with addresses
+                    if isinstance(taint_entry[0], int):
+                        return taint_entry[0]
+                elif isinstance(taint_entry, int):
+                    # Direct integer value
+                    return taint_entry
+            
+            return None
+        
         if arg_type == 'QWORD':
             qword_taint = arg.get('qword_taint', [])
-            if qword_taint and len(qword_taint) > 0 and len(qword_taint[0]) > 0:
-                return qword_taint[0][0]
-            return arg.get('qword', 0)
+            address = find_valid_address_in_taint(qword_taint)
+            return address if address is not None else arg.get('qword', 0)
         
         elif arg_type == 'DWORD':
             dword_taint = arg.get('dword_taint', [])
-            if dword_taint and len(dword_taint) > 0 and len(dword_taint[0]) > 0:
-                return dword_taint[0][0]
-            return arg.get('dword', 0)
+            address = find_valid_address_in_taint(dword_taint)
+            return address if address is not None else arg.get('dword', 0)
         
         elif arg_type == 'WORD':
             word_taint = arg.get('word_taint', [])
-            if word_taint and len(word_taint) > 0 and len(word_taint[0]) > 0:
-                return word_taint[0][0]
-            return arg.get('word', 0)
+            address = find_valid_address_in_taint(word_taint)
+            return address if address is not None else arg.get('word', 0)
         
         elif arg_type == 'BYTE':
             byte_taint = arg.get('byte_taint', [])
-            if byte_taint and len(byte_taint) > 0 and len(byte_taint[0]) > 0:
-                return byte_taint[0][0]
-            return arg.get('byte', 0)
+            address = find_valid_address_in_taint(byte_taint)
+            return address if address is not None else arg.get('byte', 0)
         
         elif arg_type == 'VPTR':
             # For VPTR, try buf_taint first (buffer content), then qword_taint (pointer)
             buf_taint = arg.get('buf_taint', [])
-            if buf_taint and len(buf_taint) > 0 and len(buf_taint[0]) > 0:
-                return buf_taint[0][0]  # Address of first tainted byte in buffer
+            if buf_taint:
+                address = find_valid_address_in_taint(buf_taint)
+                if address is not None:
+                    return address
             
             qword_taint = arg.get('qword_taint', [])
-            if qword_taint and len(qword_taint) > 0 and len(qword_taint[0]) > 0:
-                return qword_taint[0][0]
-            
-            return arg.get('qword', 0)
+            address = find_valid_address_in_taint(qword_taint)
+            return address if address is not None else arg.get('qword', 0)
         
         elif arg_type == 'PPCHAR':
             qword_taint = arg.get('qword_taint', [])
-            if qword_taint and len(qword_taint) > 0 and len(qword_taint[0]) > 0:
-                return qword_taint[0][0]
-            return arg.get('qword', 0)
+            address = find_valid_address_in_taint(qword_taint)
+            return address if address is not None else arg.get('qword', 0)
         
         return 0
-    
     @staticmethod
     def get_argument_size(arg: Dict) -> int:
         """Calculate the actual size of an argument."""
@@ -424,8 +449,8 @@ class SyscallSelector:
                     buf_taint = arg.get('buf_taint', [])
                     # print(f"DEBUG: VPTR qword_taint length: {len(qword_taint)}")
                     # print(f"DEBUG: VPTR buf_taint length: {len(buf_taint)}")
-                    if buf_taint:
-                        print(f"DEBUG: First buf_taint entry: {buf_taint[0] if buf_taint else 'None'}")
+                    # if buf_taint:
+                    #     print(f"DEBUG: First buf_taint entry: {buf_taint[0] if buf_taint else 'None'}")
                 
                 if has_taint:
                     arg_name = arg_names[i] if i < len(arg_names) else f"arg{actual_index}"
@@ -575,7 +600,7 @@ class SyscallSelector:
         
         # Format output
         main_arg_index, sub_arg_index = arg_choice
-        
+        print(f"Buffer address: {buffer_address}")
         config_output = f"""
 pluginsConfig.traceanalysis = {{
     taint_introduction_pc = {taint_introduction_pc or '0x0'},
@@ -584,6 +609,8 @@ pluginsConfig.traceanalysis = {{
     syscall_sink_pc = {syscall_sink_pc or '0x0'},
     target_syscall = {syscall_number}, -- {syscall_name}
     command = {main_arg_index}, -- {self.selected_argument_name}
+    track_workers = true,
+    process_name = "reproducer"
 }}
 """
         return config_output
