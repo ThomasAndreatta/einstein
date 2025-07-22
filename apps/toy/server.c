@@ -49,7 +49,15 @@ int my_str_cmp(char *s1, char *s2, int s1_len);
 int tcp_fd = -1;
 int uds_fd = -1;
 
+
 int fd;
+char write_buffer[20] = "im a sketchy buffer";
+int write_buffer_size = 20;
+void trigger_write(){
+    write(fd, write_buffer, write_buffer_size);
+
+}
+
 
 char *args[3] = {NULL, NULL, NULL};
 
@@ -57,6 +65,7 @@ volatile uid_t euid = 1024;
 
 char creat_filename[19] = "/tmp/test_file.txt";
 mode_t creat_mode = S_IRUSR;
+
 void trigger_creat()
 {
     // PRINT_PC("trigger_creat");
@@ -157,8 +166,10 @@ void trigger_execve(){
         execve(execve_pathname, execve_args, execve_env);
         _exit(1);
     }
-    else if (pid > 0)
+    else if (pid > 0){
         waitpid(pid, NULL, 0);
+        fprintf(stderr, "waitpid returned for child %d\n", pid); 
+    }
 
     skip:
         return;
@@ -179,7 +190,7 @@ void handle_execute(char *token)
     else if (strcmp(token, "execve") == 0)
         trigger_execve();
     else if (strcmp(token, "test") == 0)
-        trigger_mmap();
+        trigger_write();
 }
 
 void handle_client(int client_socket, int is_uds)

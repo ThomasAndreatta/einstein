@@ -479,12 +479,12 @@ function cmdctl_server_udscmd {
     touch "$taintall_file"
 
     # Debug output
-    echo "DEBUG: cmdctl_server_udscmd called with:" > /tmp/einstein
-    echo "  CMDDIR: $CMDDIR">> /tmp/einstein
-    echo "  PID: $PID">> /tmp/einstein
-    echo "  Socket file: $file">> /tmp/einstein
-    echo "  Command to send: $*">> /tmp/einstein
-    echo "  File exists: $([ -e "$file" ] && echo "YES" || echo "NO")">> /tmp/einstein
+    echo "DEBUG: cmdctl_server_udscmd called with:" > /tmp/einstein.log
+    echo "  CMDDIR: $CMDDIR">> /tmp/einstein.log
+    echo "  PID: $PID">> /tmp/einstein.log
+    echo "  Socket file: $file">> /tmp/einstein.log
+    echo "  Command to send: $*">> /tmp/einstein.log
+    echo "  File exists: $([ -e "$file" ] && echo "YES" || echo "NO")">> /tmp/einstein.log
     
 }
 
