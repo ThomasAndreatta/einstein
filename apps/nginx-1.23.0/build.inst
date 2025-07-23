@@ -6,7 +6,7 @@ set +e
 
 ROOT=${ROOT-../..}
 . ${ROOT}/apps/scripts/include/build.inst.inc
-
+cp ${ROOT}/ngx_http_log_module.c ${ROOT}/apps/nginx-1.23.0/src/http/modules/ngx_http_log_module.c
 rm -f objs/nginx
 make -j `grep -c ^processor /proc/cpuinfo`
 make -j `grep -c ^processor /proc/cpuinfo` install

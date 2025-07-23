@@ -183,7 +183,7 @@ string get_pin_offset_info(CONTEXT *ctx)
 void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
 {
     fix_syscall_args(ctx);
-
+    einstein_check_taintall_file();  // Check FIRST
     if (ctx->nr == __NR_close)
         fd_close((int)ctx->arg[0]);
 
@@ -201,9 +201,8 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
      */
     if (_einstein_save_taint)
     {
-        _einstein_last_recvfrom_backtrace = bt_str_vanilla(ctx->pinctx, true, false);
-        EINSTEIN_LOG("PC tracking triggered by taintall signal\n");
-        einstein_check_taintall_file();
+            _einstein_last_recvfrom_backtrace = bt_str_vanilla(ctx->pinctx, true, false);
+            EINSTEIN_LOG("PC tracking triggered by taintall signal\n");
     }
 
     // If we're in 'rewrite' mode, only check for this
