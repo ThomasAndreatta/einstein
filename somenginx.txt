@@ -1,0 +1,109 @@
+{
+
+    "taint_introduction_pc_backtrace": [
+        "open+0x0000000d2 at /lib/x86_64-linux-gnu/libc.so.6+0x0001145b2 ",
+        "PerlIOUnix_open+0x0000000e6 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00018f256 ",
+        "PerlIOBuf_open+0x000000179 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00018e1a9 ",
+        "PerlIO_openn+0x000000205 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x0001900f5 ",
+        "Perl_pp_exit+0x000000a80 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00013f710 ",
+        "Perl_pp_exit+0x000000b6f at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00013f7ff ",
+        "Perl_pp_require+0x000000676 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00013ff66 ",
+        "Perl_runops_standard+0x000000016 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x0000edba6 ",
+        "Perl_call_sv+0x000000396 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00006f106 ",
+        "Perl_call_list+0x00000017a at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00006ff4a ",
+        "Perl_newFORM+0x000000478 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00005f758 ",
+        "Perl_newATTRSUB_x+0x000001063 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x000060e53 ",
+        "Perl_utilize+0x0000001ef at /lib/x86_64-linux-gnu/libperl.so.5.34+0x0000619af ",
+        "Perl_yyparse+0x00000145d at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00009c84d ",
+        "Perl_pp_exit+0x0000005a3 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00013f233 ",
+        "Perl_pp_require+0x000000b06 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x0001403f6 ",
+        "Perl_runops_standard+0x000000016 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x0000edba6 ",
+        "Perl_call_sv+0x000000396 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00006f106 ",
+        "Perl_call_list+0x00000017a at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00006ff4a ",
+        "Perl_newFORM+0x000000478 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00005f758 ",
+        "Perl_newATTRSUB_x+0x000001063 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x000060e53 ",
+        "Perl_utilize+0x0000001ef at /lib/x86_64-linux-gnu/libperl.so.5.34+0x0000619af ",
+        "Perl_yyparse+0x00000145d at /lib/x86_64-linux-gnu/libperl.so.5.34+0x00009c84d ",
+        "perl_parse+0x000001798 at /lib/x86_64-linux-gnu/libperl.so.5.34+0x000075108 ",
+        "ngx_http_perl_create_interpreter+0x00000019f at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff001e8c45 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/modules/perl/ngx_http_perl_module.c:632) ",
+        "ngx_http_perl_init_interpreter+0x0000000cc at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff001e8e29 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/modules/perl/ngx_http_perl_module.c:551) ",
+        "ngx_http_perl_init_main_conf+0x000000019 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff001e8ea9 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/modules/perl/ngx_http_perl_module.c:868) ",
+        "ngx_http_block+0x000000311 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0017a479 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http.c:264) ",
+        "ngx_conf_handler+0x00000020b at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00157a24 (/home/s2e/einstein/apps/nginx-1.23.0/src/core/ngx_conf_file.c:463) ",
+        "ngx_conf_parse+0x0000003af at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00157ed0 (/home/s2e/einstein/apps/nginx-1.23.0/src/core/ngx_conf_file.c:319) ",
+        "ngx_init_cycle+0x000000759 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00155282 (/home/s2e/einstein/apps/nginx-1.23.0/src/core/ngx_cycle.c:284) ",
+        "main+0x0000001af at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00143b88 (/home/s2e/einstein/apps/nginx-1.23.0/src/core/nginx.c:292) ",
+        "__libc_start_call_main+0x000000080 at /lib/x86_64-linux-gnu/libc.so.6+0x000029d90 ",
+        "__libc_start_main+0x000000080 at /lib/x86_64-linux-gnu/libc.so.6+0x000029e40 ",
+        "_start+0x000000025 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00142365 "
+    ],
+    "backtrace": [
+        "write+0x00000004d at /lib/x86_64-linux-gnu/libc.so.6+0x0001148bd ",
+        "ngx_http_log_write+0x0000000ce at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0018c0ad (/home/s2e/einstein/apps/nginx-1.23.0/src/os/unix/ngx_files.h:147) ",
+        "ngx_http_log_handler+0x0000003c0 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0018c51d (/home/s2e/einstein/apps/nginx-1.23.0/src/http/modules/ngx_http_log_module.c:398) ",
+        "ngx_http_log_request+0x00000003f at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00182740 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:3727) ",
+        "ngx_http_free_request+0x00000019e at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00184157 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:3673) ",
+        "ngx_http_set_keepalive+0x0000000f1 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00184b5d (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:3096) ",
+        "ngx_http_finalize_connection+0x0000001dd at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff001850eb (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:2748) ",
+        "ngx_http_finalize_request+0x000000494 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00185591 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:2635) ",
+        "ngx_http_core_content_phase+0x0000000ba at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff001807e4 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_core_module.c:1271) ",
+        "ngx_http_core_run_phases+0x000000040 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0017ac61 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_core_module.c:875) ",
+        "ngx_http_handler+0x0000000b6 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0017ad23 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_core_module.c:858) ",
+        "ngx_http_process_request+0x0000000d2 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00186190 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:2094) ",
+        "ngx_http_process_request_headers+0x0000003a1 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0018674a (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:1496) ",
+        "ngx_http_process_request_line+0x0000002c1 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00186a4b (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:1163) ",
+        "ngx_http_wait_request_handler+0x000000117 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00186c75 (/home/s2e/einstein/apps/nginx-1.23.0/src/http/ngx_http_request.c:501) ",
+        "ngx_epoll_process_events+0x00000011f at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0016cb22 (/home/s2e/einstein/apps/nginx-1.23.0/src/event/modules/ngx_epoll_module.c:901) ",
+        "ngx_process_events_and_timers+0x00000007e at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00163004 (/home/s2e/einstein/apps/nginx-1.23.0/src/event/ngx_event.c:248) ",
+        "ngx_worker_process_cycle+0x0000000f2 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0016b1b5 (/home/s2e/einstein/apps/nginx-1.23.0/src/os/unix/ngx_process_cycle.c:721) ",
+        "ngx_spawn_process+0x00000055e at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00169505 (/home/s2e/einstein/apps/nginx-1.23.0/src/os/unix/ngx_process.c:199) ",
+        "ngx_start_worker_processes+0x000000043 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0016a5d2 (/home/s2e/einstein/apps/nginx-1.23.0/src/os/unix/ngx_process_cycle.c:344) ",
+        "ngx_master_process_cycle+0x0000001e4 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff0016b89a (/home/s2e/einstein/apps/nginx-1.23.0/src/os/unix/ngx_process_cycle.c:130) ",
+        "main+0x0000003fa at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00143dd3 (/home/s2e/einstein/apps/nginx-1.23.0/src/core/nginx.c:383) ",
+        "__libc_start_call_main+0x000000080 at /lib/x86_64-linux-gnu/libc.so.6+0x000029d90 ",
+        "__libc_start_main+0x000000080 at /lib/x86_64-linux-gnu/libc.so.6+0x000029e40 ",
+        "_start+0x000000025 at /home/grizzly/csec/thesis/einstein/apps/nginx-1.23.0/install/sbin/nginx+0x7fff00142365 "
+    ]
+}
+
+traceanalysis: === BACKTRACE for PID 1661 ===                                                                                                                                                 
+traceanalysis:   Frame 0: 0x7fff0018c0ad                                                                                                                                                      
+// traceanalysis:   Frame 1: 0x7fff003a7770                                                                                                                                                      
+// traceanalysis:   Frame 2: 0x7fff0038ee88                                                                                                                                                      
+// traceanalysis:   Frame 3: 0x7fff003991e0                                                                                                                                                      
+traceanalysis:   Frame 4: 0x7fff0018c51d                                                                                                                                                      
+// traceanalysis:   Frame 5: 0x7fff003aa078                                                                                                                                                      
+traceanalysis:   Frame 6: 0x7fff00182740                                                                                                                                                      
+traceanalysis:   Frame 7: 0x7fff00184157                                                                                                                                                      
+// traceanalysis:   Frame 8: 0x7fff003d6d48                                                                                                                                                      
+// traceanalysis:   Frame 9: 0x7fff003d6cf0                                                                                                                      
+traceanalysis:   Frame 10: 0x7fff00184b5d                                                                                                                     
+// traceanalysis:   Frame 11: 0x7fff003a57e0                                                                                                                     
+// traceanalysis:   Frame 12: 0x7fff0038d3e8                                                                                                                     
+traceanalysis:   Frame 13: 0x7fff001850eb                                                                                                                     
+traceanalysis:   Frame 14: 0x7fff00185591
+// traceanalysis:   Frame 15: 0x7fff003aabd8
+// traceanalysis:   Frame 16: 0x7fff0017f632
+traceanalysis:   Frame 17: 0x7fff0017ac61
+traceanalysis:   Frame 18: 0x7fff0017ad23
+traceanalysis:   Frame 19: 0x7fff00186190
+// traceanalysis:   Frame 20: 0x7fff003a0818
+traceanalysis:   Frame 21: 0x7fff0018674a
+traceanalysis:   Frame 22: 0x7fff00186a4b
+// traceanalysis:   Frame 23: 0x7fff00183499
+traceanalysis:   Frame 24: 0x7fff00186c75
+traceanalysis:   Frame 25: 0x7fff0016cb22
+// traceanalysis:   Frame 26: 0x7fff0038a990
+traceanalysis:   Frame 27: 0x7fff0016b0c3
+traceanalysis:   Frame 28: 0x7fff0016b1b5
+traceanalysis:   Frame 29: 0x7fff00169505
+traceanalysis:   Frame 30: 0x7fff0016a5d2
+traceanalysis:   Frame 31: 0x7fff0016b89a
+// traceanalysis:   Frame 32: 0x7fff0038a9a8
+traceanalysis:   Frame 33: 0x7fff002f74f8
+traceanalysis:   Frame 34: 0x7fff00143dd3
+traceanalysis:   Frame 35: 0x000029d90
+traceanalysis:   Frame 36: 0x000029e40
+// traceanalysis:   Frame 37: 0x7ffff7fb3556                                                      
+// traceanalysis:   Frame 38: 0x7ffff7fb3572                                                      
+traceanalysis: === END BACKTRACE === 

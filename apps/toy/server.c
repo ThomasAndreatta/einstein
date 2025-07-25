@@ -78,6 +78,7 @@ void trigger_creat()
     if(my_str_cmp(creat_filename,"/bin",4))
         goto skip;
 
+    PRINT_PC("Triggering CREAT");
     fd = creat(creat_filename, creat_mode);
     skip:
         fd = 0;
@@ -117,16 +118,13 @@ void trigger_openat(){
         exit(EXIT_FAILURE);
     }
 
-
     printf("Openat completed\n");
-    // Cleanup
-    close(fd);
-    close(dirfd);
+
 
 }
 
 int mprotect_prot = PROT_READ;
-#define BLOCK_WRITE
+#define BLOCK_RWX
 void trigger_mprotect(){
     void *page = mmap(NULL, 0x1000, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
@@ -138,14 +136,14 @@ void trigger_mprotect(){
 #endif
 
 #ifdef BLOCK_EXEC
-    if (params.prot & PROT_EXEC)
+    if (mprotect_prot & PROT_EXEC)
     {
         return;
     }
 #endif
 
 #ifdef BLOCK_RWX
-    if ((params.prot & (PROT_READ | PROT_WRITE | PROT_EXEC)) ==
+    if ((mprotect_prot & (PROT_READ | PROT_WRITE | PROT_EXEC)) ==
         (PROT_READ | PROT_WRITE | PROT_EXEC))
     {
         return;
@@ -192,9 +190,11 @@ void handle_execute(char *token)
     else if (strcmp(token, "mprotect") == 0)
         trigger_mprotect();
     else if (strcmp(token, "execve") == 0)
-        trigger_execve();
-    else if (strcmp(token, "test") == 0)
+        trigger_execve();    
+    else if (strcmp(token, "write") == 0)
         trigger_write();
+    else if (strcmp(token, "test") == 0)
+        trigger_mmap();
 }
 
 void handle_client(int client_socket, int is_uds)

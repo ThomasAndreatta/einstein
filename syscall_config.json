@@ -43,9 +43,13 @@
     "mprotect": {
         "syscall_number": 10,
         "valid_args": [
+            0,
+            1,
             2
         ],
         "arg_names": [
+            "addr",
+            "size",
             "prot"
         ],
         "special_handling": false
