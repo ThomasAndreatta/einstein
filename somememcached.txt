@@ -40,6 +40,34 @@
     ]
 }
  
+
+
+traceanalysis: FINAL BACKTRACE AT SINK:                                                                                                                       
+traceanalysis: === BACKTRACE for PID 1477 ===                                                                                                                 
+traceanalysis:   Frame 0: 0xa35b2                                                                                                                             
+traceanalysis:   Frame 1: 0xa48dd                                                                                                                             
+traceanalysis:   Frame 2: 0xa5139                                                                                                                             
+traceanalysis:   Frame 3: 0x7fff00167dc0                                                                                                                      
+traceanalysis:   Frame 4: 0x7fff0010a0f9                                                                                                                      
+traceanalysis:   Frame 5: 0x7fff0011ad1b                                                                                                                      
+traceanalysis:   Frame 6: 0x7fff0011adc7                                                                                                                      
+traceanalysis:   Frame 7: 0x73f58                                                                                                                             
+traceanalysis:   Frame 8: 0x758a7                                                                                                                             
+traceanalysis:   Frame 9: 0xfe090                                                                                                                             
+traceanalysis:   Frame 10: 0xa65f9                                                                                                                            
+traceanalysis:   Frame 11: 0xfe090                                                                                                                            
+traceanalysis:   Frame 12: 0x7fff0011a966                                                                                                                     
+traceanalysis:   Frame 13: 0xfe090                                                                                                                            
+traceanalysis:   Frame 14: 0x26850                                                                                                                            
+traceanalysis:   Frame 15: 0xbe4c0                                                                                                                            
+traceanalysis:   Frame 16: 0xbeac0                                                                                                                            
+traceanalysis: === END BACKTRACE ===      
+
+
+
+
+
+
 traceanalysis: === BACKTRACE for PID 1596 ===                                                                                                                 
 traceanalysis:   Frame 0: 0x0000a35b2                                                                                                                      
 traceanalysis:   Frame 1: 0x0000a48dd                                                                                                                      

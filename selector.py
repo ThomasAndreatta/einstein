@@ -211,12 +211,12 @@ class BacktraceAnalyzer:
         # Look for pattern like "server+0x7fff00102f74" after " at "
         match = re.search(r' at [^+]+\+0x([0-9a-fA-F]+)', backtrace_entry)
         if match:
-            return match.group(1)
+            return match.group(1).lower()  # Return lowercase for consistency
         
         # Fallback: look for the last hex address pattern
         matches = re.findall(r'\+0x([0-9a-fA-F]+)', backtrace_entry)
         if matches:
-            return matches[-1]
+            return matches[-1].lower()  # Return lowercase for consistency
         
         return None
     
@@ -580,19 +580,48 @@ class SyscallSelector:
             return address, size
         
         return 0, 0
-    
+        
     def generate_config(self, syscall_call: Dict, arg_choice: Tuple[int, Optional[int]]) -> str:
         """Generate S2E configuration."""
         syscall_name = syscall_call.get('syscall', 'unknown')
         config_info = self.config.get_syscall_info(syscall_name)
         syscall_number = config_info.get('syscall_number', 'unknown') if config_info else 'unknown'
         
-        # Get PCs
+        # Extract all addresses from taint_introduction_pc_backtrace
         taint_backtrace = syscall_call.get('taint_introduction_pc_backtrace', [])
-        taint_introduction_pc = BacktraceAnalyzer.get_pc_from_backtrace(taint_backtrace)
+        taint_introduction_addresses = []
         
+        for entry in taint_backtrace:
+            address = BacktraceAnalyzer.extract_address_from_backtrace(entry)
+            if address:
+                # Convert to hex with 0x prefix
+                taint_introduction_addresses.append(f"0x{address}")
+        
+        # Format the taint addresses array for Lua
+        if taint_introduction_addresses:
+            taint_introduction_pc_array = "{" + ",".join(taint_introduction_addresses) + "}"
+        else:
+            # Fallback to single address
+            single_taint_pc = BacktraceAnalyzer.get_pc_from_backtrace(taint_backtrace)
+            taint_introduction_pc_array = single_taint_pc or '0x0'
+        
+        # Extract all addresses from backtrace for syscall_sink_pc array
         backtrace = syscall_call.get('backtrace', [])
-        syscall_sink_pc = BacktraceAnalyzer.get_pc_from_backtrace(backtrace)
+        syscall_sink_addresses = []
+        
+        for entry in backtrace:
+            address = BacktraceAnalyzer.extract_address_from_backtrace(entry)
+            if address:
+                # Convert to hex with 0x prefix
+                syscall_sink_addresses.append(f"0x{address}")
+        
+        # Format the addresses array for Lua
+        if syscall_sink_addresses:
+            syscall_sink_pc_array = "{" + ",".join(syscall_sink_addresses) + "}"
+        else:
+            # Fallback to single address
+            single_pc = BacktraceAnalyzer.get_pc_from_backtrace(backtrace)
+            syscall_sink_pc_array = single_pc or '0x0'
         
         # Get argument info
         syscall_args = syscall_call.get('syscall_args', [])
@@ -601,20 +630,26 @@ class SyscallSelector:
         # Format output
         main_arg_index, sub_arg_index = arg_choice
         print(f"Buffer address: {buffer_address}")
+        print(f"Taint introduction addresses: {taint_introduction_addresses}")
+        print(f"Syscall sink addresses: {syscall_sink_addresses}")
+        
         config_output = f"""
-pluginsConfig.traceanalysis = {{
-    taint_introduction_pc = {taint_introduction_pc or '0x0'},
-    buffer_to_symbolic = 0x{buffer_address:X},
-    buffer_to_symbolic_size = {buffer_size},
-    syscall_sink_pc = {syscall_sink_pc or '0x0'},
-    target_syscall = {syscall_number}, -- {syscall_name}
-    command = {main_arg_index}, -- {self.selected_argument_name}
-    track_workers = true,
-    process_name = "reproducer"
-}}
-"""
+    pluginsConfig.traceanalysis = {{
+        taint_introduction_pc = {taint_introduction_pc_array},
+        buffer_to_symbolic = 0x{buffer_address:X},
+        buffer_to_symbolic_size = {buffer_size},
+        syscall_sink_pc = {syscall_sink_pc_array},
+        target_syscall = {syscall_number}, -- {syscall_name}
+        command = {main_arg_index}, -- {self.selected_argument_name}
+        track_workers = true,
+        process_name = "reproducer",
+        base_binary = 0x7fff00000000,
+        end_binary = 0x7ffff0000000,
+    }}
+    """
         return config_output
-    
+
+
     def save_config(self, config_output: str, template_file: str = "s2e-config.template.lua", 
                    output_file: str = "s2e-config.lua"):
         """Save configuration to file."""
