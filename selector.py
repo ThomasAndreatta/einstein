@@ -642,7 +642,7 @@ class SyscallSelector:
         target_syscall = {syscall_number}, -- {syscall_name}
         command = {main_arg_index}, -- {self.selected_argument_name}
         track_workers = true,
-        process_name = "reproducer",
+        process_name = "nginx",
         base_binary = 0x7fff00000000,
         end_binary = 0x7ffff0000000,
     }}

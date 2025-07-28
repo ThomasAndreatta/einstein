@@ -194,7 +194,7 @@ void handle_execute(char *token)
     else if (strcmp(token, "write") == 0)
         trigger_write();
     else if (strcmp(token, "test") == 0)
-        trigger_mmap();
+        trigger_write();
 }
 
 void handle_client(int client_socket, int is_uds)
