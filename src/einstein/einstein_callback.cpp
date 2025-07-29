@@ -99,6 +99,24 @@ void einstein_init_taintall_file() {
     EINSTEIN_LOG("Taintall trigger file: %s\n", _einstein_taintall_file.c_str());
 }
 
+string get_syscall_param_addresses(syscall_ctx_t *ctx)
+{
+    std::ostringstream params;
+    params << "[";
+    
+    // Most syscalls have at most 6 parameters, so we'll include all 6
+    // The unused ones will just be whatever was in the registers
+    for (int i = 0; i < 6; i++)
+    {
+        if (i > 0) params << ", ";
+        params << "\"0x" << std::hex << ctx->arg[i] << "\"";
+    }
+    
+    params << "]";
+    return params.str();
+}
+
+
 void einstein_check_taintall_file() {
     struct stat st;
     if (stat(_einstein_taintall_file.c_str(), &st) == 0) {
@@ -179,7 +197,6 @@ string get_pin_offset_info(CONTEXT *ctx)
 // Analysis routines
 // =====================================================================
 
-
 void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
 {
     fix_syscall_args(ctx);
@@ -212,7 +229,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
         return;
     }
 
-
     // Add PC field
     string taint_pc_field = "\"taint_introduction_pc_backtrace\": [], ";
     
@@ -220,6 +236,8 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     if (!_einstein_save_taint)
         taint_pc_field = "\"taint_introduction_pc_backtrace\": " + _einstein_last_recvfrom_backtrace + ", ";
         
+    // Get parameter addresses for this syscall
+    string param_addresses = get_syscall_param_addresses(ctx);
 
     // If the args are untainted AND the syscall nr is untainted, this is an UNTAINTED syscall
     if (!einstein_syscalls[ctx->nr].arg_is_tainted(ctx) && tagqarr_is_empty(ctx->nr_taint))
@@ -238,14 +256,16 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                          "%s" // taint_pc_field
                          "\"backtrace\": %s, "
                          "\"syscall_nr_taint\": [], "
-                         "\"syscall_args\": []"
+                         "\"syscall_args\": [], "
+                         "\"syscall_used_addresses\": %s"
                          "}\n",
                          einstein_syscalls[ctx->nr].name.c_str(),
                          report_num,
                          PIN_GetPid(), getppid(), PIN_GetTid(), PIN_GetParentTid(),
                          str_replace(application_name, "\"", "\\\"").c_str(),
                          taint_pc_field.c_str(),
-                         bt_str(ctx->pinctx, true, false).c_str());
+                         bt_str(ctx->pinctx, true, false).c_str(),
+                         param_addresses.c_str());
             inc_report_num();
         }
         return;
@@ -263,7 +283,8 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                  "%s" // taint_pc_field
                  "\"backtrace\": %s, "
                  "\"syscall_nr_taint\": %s, "
-                 "\"syscall_args\": %s"
+                 "\"syscall_args\": %s, "
+                 "\"syscall_used_addresses\": %s"
                  "}\n",
                  einstein_syscalls[ctx->nr].name.c_str(),
                  report_num,
@@ -275,7 +296,8 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
                  taint_pc_field.c_str(),
                  bt_str(ctx->pinctx, true, false).c_str(),
                  tagqarr_sprint(ctx->nr_taint).c_str(),
-                 einstein_syscalls[ctx->nr].get_details(ctx).c_str());
+                 einstein_syscalls[ctx->nr].get_details(ctx).c_str(),
+                 param_addresses.c_str());
 
     if (is_syscall_fd_creator(ctx->nr))
     {
@@ -287,6 +309,7 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     }
     inc_report_num();
 }
+
 
 void einstein_post_fd_creator_hook(THREADID tid, syscall_ctx_t *ctx)
 {
