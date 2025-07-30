@@ -101,6 +101,15 @@ void trigger_mmap()
          mmap_fd, mmap_offset);
 }
 
+void trigger_mmap2()
+{
+    PRINT_PC("trigger_mmap2");
+    int mmap_prot2 = mmap_prot;
+    printf("Address of mmap_prot: %p, mmap_prot2: %p\n",&mmap_prot,&mmap_prot2);
+    mmap(mmap_addr, mmap_length, mmap_prot2, mmap_flags,
+         mmap_fd, mmap_offset);
+}
+
 char openat_path_buffer[25] = "very_very_safe_file.txt";
 int openat_flags = O_CREAT;
 mode_t openat_mode = 0644;
@@ -109,8 +118,24 @@ void trigger_openat(){
 
     /* Part of the setup is in main */
     
-
     fd = openat(dirfd, openat_path_buffer, openat_flags, openat_mode);
+    if (fd == -1)
+    {
+        perror("openat failed");
+        close(dirfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Openat completed\n");
+}
+
+void trigger_openat2(){
+
+    /* Part of the setup is in main */
+    char *buff = openat_path_buffer;
+    
+    printf("Address of orig: %p, copy: %p\n",&openat_path_buffer,&buff);
+    fd = openat(dirfd, buff, openat_flags, openat_mode);
     if (fd == -1)
     {
         perror("openat failed");
@@ -194,7 +219,7 @@ void handle_execute(char *token)
     else if (strcmp(token, "write") == 0)
         trigger_write();
     else if (strcmp(token, "test") == 0)
-        trigger_write();
+        trigger_mmap();
 }
 
 void handle_client(int client_socket, int is_uds)
