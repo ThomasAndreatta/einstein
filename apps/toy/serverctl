@@ -13,7 +13,7 @@ shift || mode="no_action"
 case "$mode" in
   'start')
     echo "***** Starting $PROC_NAME server..."
-    eval $CMD_PREFIX $BIN_PATH $* &
+    eval $CMD_PREFIX $BIN_PATH -d $*
     ;;
   *)
     cmdctl_server_action $mode $*

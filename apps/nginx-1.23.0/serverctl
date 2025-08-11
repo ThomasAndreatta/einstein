@@ -21,7 +21,7 @@ case "$mode" in
     #LOG_SUB_DIR=${LOG_SUB_DIR:-default}
     #mkdir -p .tmp/pss
     #daemonize ${ROOT}/scripts/watch-pss.sh nginx ${PWD}/.tmp/pss/${LOG_SUB_DIR}.pss &
-    eval $CMD_PREFIX $BIN_PATH $* &
+    eval $CMD_PREFIX $BIN_PATH $*
     ;;
   'cleanup')
     #set +e ; pkill watch-pss ; set -e
