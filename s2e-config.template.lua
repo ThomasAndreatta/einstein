@@ -68,7 +68,7 @@ pluginsConfig.Vmi = {
         "/home/grizzly/csec/thesis/s2e-traceanalysis/s2e/projects/reproducer",
 
 
-            "/home/grizzly/csec/thesis/s2e-traceanalysis/s2e/images/ubuntu-22.04-x86_64/guestfs",
+            "/home/grizzly/csec/thesis/s2e-traceanalysis/s2e/images/ubuntu-24.04-x86_64/guestfs",
 
 
     },
