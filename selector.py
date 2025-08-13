@@ -5,7 +5,7 @@ Syscall Taint Analysis Configuration Generator
 This script analyzes syscall traces to identify tainted syscalls and generates
 configuration files for S2E symbolic execution.
 """
-
+import os 
 import json
 import sys
 import re
@@ -696,11 +696,14 @@ class SyscallSelector:
             return
         
         # Replace name_placeholder with binary_name
+        dir_path = '/'.join(os.path.dirname(os.path.realpath(__file__)).split("/")[:-1])
         template_content = template_content.replace("name_placeholder", binary_name)
+        template_content = template_content.replace("s2e_path_placeholder", dir_path)
         config_output = config_output.replace("name_placeholder", binary_name)
         
         print("\nGenerated Configuration:")
         print("=" * 50)
+        print(f"S2E working path: {dir_path}/s2e-traceanalysis")
         print(config_output)
 
         try:
