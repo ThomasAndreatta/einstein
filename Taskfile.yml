@@ -336,26 +336,31 @@ tasks:
 
   app-test:
     cmds:
+      - echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
       - task einstein-default-config apps-stop
       - cd apps && ./simple-test.sh {{.CLI_ARGS}}
 
   app-eval:
     cmds:
+      - echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
       - task einstein-default-config apps-stop
       - time ( cd apps/{{.CLI_ARGS}} && BENCH_TYPE=2 ./clientctl bench || true )
 
   app-eval-brief:
     cmds:
+      - echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
       - timeout --preserve-status 2m task app-eval -- {{.CLI_ARGS}}
       - task apps-stop
 
   app-eval-custom:
     cmds:
+      - echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
       - task apps-stop
       - time ( cd apps/{{.CLI_ARGS}} && BENCH_TYPE=3 ./clientctl bench || true )
 
   app-eval-tmp:
     cmds:
+      - echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
       - task apps-stop
       - time ( cd apps/{{.CLI_ARGS}} && BENCH_TYPE=4 ./clientctl bench || true )
 
@@ -427,6 +432,40 @@ tasks:
   toy-eval:          {cmds: [task app-eval        -- toy]}
 
   ################################
+  #### Einste-S2E Artifact
+  selector:
+    desc: Starts the selector script for creating S2E configuration
+    cmds:
+    - |
+      bash -c '
+      set -- {{.CLI_ARGS}}
+      if [ "$#" -eq 1 ]; then
+        python3 selector.py "$1" ./results/reports/dcurrent.json
+      else
+        python3 selector.py "$@"
+      fi
+      '
+    vars:
+      ARGS: '{{.CLI_ARGS}}'
+    silent: true
+    preconditions:
+      - sh: '[ -n "{{.CLI_ARGS}}" ]'
+  experiment1:
+    desc: Run experiment 1 (mmap) of artifact evaluation
+    cmds:
+      - task reports-clean
+      - task toy-build toy-test
+      - task db-add-reports db-analyze-reports db-print-candidates
+      - echo -e "1\n2" | task selector -- reproducer
+  experiment2:
+    desc: Run experiment 2 (idk) of artifact evaluation
+    cmds:
+      - task reports-clean
+      # - task toy-build toy-test
+      - task db-add-reports db-analyze-reports db-print-candidates
+      # - echo -e "1\n2" | task selector -- reproducer
+
+  ################################
   #### All apps
 
   apps-stop:
@@ -441,16 +480,19 @@ tasks:
   apps-test:
     desc: Run all the apps with a simple workload
     cmds:
+      - echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
       - task nginx-test lighttpd-test apache-test postgres-test redis-test memcached-test
 
   apps-eval:
     desc: Run all the apps with their test suites
     cmds:
+      - echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
       - task einstein-default-config nginx-eval lighttpd-eval apache-eval postgres-eval redis-eval memcached-eval
 
   apps-eval-brief:
     desc: Run all the apps with their test suites until some timeout
     cmds:
+      - echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
       - task einstein-default-config nginx-eval-brief lighttpd-eval-brief apache-eval-brief postgres-eval-brief redis-eval-brief memcached-eval-brief
 
   ##############################################################################
