@@ -109,22 +109,22 @@ int mmap_prot = PROT_READ;
 int mmap_flags = MAP_PRIVATE;
 int mmap_fd;
 off_t mmap_offset = 0;
+#define BLOCK_MMAP
 void trigger_mmap() {
 	PRINT_PC("trigger_mmap");
 	simple_useless_function(mmap_length);
 	simple_useless_function(mmap_prot);
 	simple_useless_function(mmap_flags);
 	simple_useless_function(mmap_fd);
+
+#ifdef BLOCK_MMAP
+	if((mmap_prot & (PROT_EXEC | PROT_WRITE)) == (PROT_EXEC | PROT_WRITE))
+		return;
+#endif
+
 	mmap(mmap_addr, mmap_length, mmap_prot, mmap_flags, mmap_fd, mmap_offset);
 }
 
-void trigger_mmap2() {
-	PRINT_PC("trigger_mmap2");
-	int mmap_prot2 = mmap_prot;
-	printf(
-		"Address of mmap_prot: %p, mmap_prot2: %p\n", &mmap_prot, &mmap_prot2);
-	mmap(mmap_addr, mmap_length, mmap_prot2, mmap_flags, mmap_fd, mmap_offset);
-}
 
 char openat_path_buffer[25] = "very_very_safe_file.txt";
 int openat_flags = O_CREAT;
