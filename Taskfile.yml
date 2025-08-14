@@ -39,7 +39,7 @@ tasks:
     cmds:
       - sudo apt-get update # && sudo apt-get -y upgrade
       - sudo apt-get install -y cpanminus libpq-dev miller libldap2-dev libpam0g-dev libzstd-dev libbz2-dev libxxhash-dev libmaxminddb-dev liblua5.4-dev lldb gcovr smem gcc-9 g++-9 python3-pip postgresql prelink libpcre3-dev libxslt-dev libgeoip-dev libgd-dev libperl-dev libipc-run-perl bison flex libmemcached-tools libevent-dev gdb net-tools apache2-dev libcrypt-ssleay-perl
-      - pip install django tqdm pygdbmi psycopg2 --break-system-packages # For ubuntu 24.04
+      - pip install django tqdm pygdbmi psycopg2
       - cpanm -S IPC::Run Time::Stopwatch Bundle::ApacheTest HTTP::DAV DateTime Time::HiRes Test::Harness Crypt::SSLeay Net::SSLeay IO::Socket::SSL IO::Socket::IP IO::Select LWP::Protocol::https AnyEvent AnyEvent::WebSocket::Client LWP::Protocol::AnyEvent::http FCGI
 
   init-submodule:
@@ -426,10 +426,10 @@ tasks:
   memcached-parse-reports: {cmds: [task parse-app       -- memcached-1.6.17]}
 
   ################################
-  #### toy-app
-  toy-build:         {cmds: [task app-build       -- toy]}
-  toy-test:          {cmds: [task app-test        -- toy]}
-  toy-eval:          {cmds: [task app-eval        -- toy]}
+  #### s2e_server-app
+  s2e_server-build:         {cmds: [task app-build       -- s2e_server]}
+  s2e_server-test:          {cmds: [task app-test        -- s2e_server]}
+  s2e_server-eval:          {cmds: [task app-eval        -- s2e_server]}
 
   ################################
   #### Einste-S2E Artifact
@@ -454,14 +454,14 @@ tasks:
     desc: Run experiment 1 (mmap) of artifact evaluation
     cmds:
       - task reports-clean
-      - task toy-build toy-test
+      - task s2e_server-build s2e_server-test
       - task db-add-reports db-analyze-reports db-print-candidates
       - echo -e "1\n2" | task selector -- reproducer
   experiment2:
     desc: Run experiment 2 (idk) of artifact evaluation
     cmds:
       - task reports-clean
-      # - task toy-build toy-test
+      # - task s2e_server-build s2e_server-test
       - task db-add-reports db-analyze-reports db-print-candidates
       # - echo -e "1\n2" | task selector -- reproducer
 
