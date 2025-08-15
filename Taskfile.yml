@@ -475,7 +475,7 @@ tasks:
   apps-build:
     desc: Build all the apps
     cmds:
-      - time ( task nginx-build lighttpd-build apache-build postgres-build redis-build memcached-build )
+      - time ( task nginx-build lighttpd-build apache-build postgres-build redis-build memcached-build s2e_server )
 
   apps-test:
     desc: Run all the apps with a simple workload
