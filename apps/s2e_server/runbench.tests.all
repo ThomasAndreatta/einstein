@@ -1,0 +1,6 @@
+creat
+mmap
+openat
+mprotect
+execve
+write

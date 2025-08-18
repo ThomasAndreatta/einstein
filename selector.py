@@ -140,8 +140,19 @@ class TaintAnalyzer:
             
             return has_qword_taint or has_nested_taint
         
+        elif arg_type == 'IOVEC':
+            # Check qword_taint (iovec array pointer) and nested vptrs
+            qword_taint = arg.get('qword_taint', [])
+            has_qword_taint = has_valid_taint_entries(qword_taint)
+            
+            # Check nested vptrs (the actual iovec entries)
+            vptrs = arg.get('vptrs', [])
+            has_nested_taint = any(TaintAnalyzer.has_taint_data(vptr) for vptr in vptrs)
+            
+            return has_qword_taint or has_nested_taint
+        
         return False
-    
+
     @staticmethod
     def get_taint_address(arg: Dict) -> Optional[int]:
         """Extract the taint address from an argument."""
@@ -199,6 +210,18 @@ class TaintAnalyzer:
             qword_taint = arg.get('qword_taint', [])
             address = find_valid_address_in_taint(qword_taint)
             return address if address is not None else arg.get('qword', 0)
+        elif arg_type == 'IOVEC':
+            # For IOVEC, check nested vptrs first, then qword_taint
+            vptrs = arg.get('vptrs', [])
+            if vptrs:
+                # Return address of first tainted vptr
+                for vptr in vptrs:
+                    if TaintAnalyzer.has_taint_data(vptr):
+                        return TaintAnalyzer.get_taint_address(vptr)
+            
+            qword_taint = arg.get('qword_taint', [])
+            address = find_valid_address_in_taint(qword_taint)
+            return address if address is not None else arg.get('qword', 0)
         
         return 0
     @staticmethod
@@ -214,6 +237,13 @@ class TaintAnalyzer:
             # Fallback to string length + null terminator
             string_content = arg.get('str', '')
             return len(string_content.encode('utf-8')) + 1
+        elif arg_type == 'IOVEC':
+            # For iovec, calculate total size of all buffers
+            vptrs = arg.get('vptrs', [])
+            total_size = 0
+            for vptr in vptrs:
+                total_size += TaintAnalyzer.get_argument_size(vptr)
+            return total_size if total_size > 0 else 8  # Default to pointer size
         
         # Fixed sizes for other types
         size_map = {
@@ -304,6 +334,29 @@ class ArgumentDisplay:
                 content_info = ' (empty array)'
             size_info = ' [pointer: 8 bytes]'
         
+        elif arg_type == 'IOVEC':
+            vptrs = arg.get('vptrs', [])
+            if vptrs:
+                total_size = sum(TaintAnalyzer.get_argument_size(vptr) for vptr in vptrs)
+                # Show first iovec entry content
+                first_vptr = vptrs[0]
+                if TaintAnalyzer.has_taint_data(first_vptr):
+                    string_content = first_vptr.get('str', '')
+                    if string_content:
+                        # Truncate for display
+                        if len(string_content) > 60:
+                            truncated = string_content[:57] + "..."
+                        else:
+                            truncated = string_content
+                        content_info = f' = "{truncated}" (iovec with {len(vptrs)} entries, total {total_size} bytes)'
+                    else:
+                        content_info = f' (iovec with {len(vptrs)} entries, total {total_size} bytes)'
+                else:
+                    content_info = f' (iovec with {len(vptrs)} entries, total {total_size} bytes)'
+            else:
+                content_info = ' (empty iovec)'
+            size_info = ' [iovec array]'
+        
         elif arg_type in ['QWORD', 'DWORD', 'WORD', 'BYTE']:
             value_field = arg_type.lower()
             value = arg.get(value_field, 0)
@@ -315,7 +368,6 @@ class ArgumentDisplay:
             size_info = ' [unknown size]'
         
         return content_info, size_info
-
 
 class SyscallSelector:
     """Main class for syscall selection and configuration generation."""
@@ -352,8 +404,8 @@ class SyscallSelector:
                 
                 # Only include syscalls in configuration
                 if self.config.is_supported(syscall_name):
-                    # Simple deduplication based on syscall name and args
-                    signature = f"{syscall_name}|{len(call.get('syscall_args', []))}"
+                    # Simple deduplication based on syscall name and backtraces
+                    signature = f"{syscall_name}|{call.get('taint_introduction_pc_backtrace', [])}|{call.get('backtrace', [])}"
                     if signature not in seen_signatures:
                         seen_signatures.add(signature)
                         tainted_calls.append(call)
@@ -368,7 +420,7 @@ class SyscallSelector:
             print(f"Removed {duplicate_count} duplicate tainted syscall(s)")
         
         return tainted_calls
-    
+        
     def display_tainted_syscalls(self, tainted_calls: List[Dict]):
         """Display available tainted syscalls."""
         if not tainted_calls:
@@ -386,6 +438,13 @@ class SyscallSelector:
             print(f"{i}. {syscall_name} (syscall #{config_info.get('syscall_number', 'unknown')})")
             print(f"   Report: {call.get('report_num', 'N/A')}, PID: {call.get('pid', 'N/A')}")
             
+            # Display tainted argument content on separate lines
+            syscall_args = call.get('syscall_args', [])
+            tainted_content = self._get_tainted_content_summary(syscall_args)
+            if tainted_content:
+                for content_line in tainted_content:
+                    print(f"   Content: {content_line}")
+            
             # Show first few backtrace frames
             backtrace = call.get('backtrace', [])
             print(f"   Backtrace:")
@@ -395,7 +454,75 @@ class SyscallSelector:
             if len(backtrace) > 3:
                 print(f"     ... and {len(backtrace) - 3} more frames")
             print()
-    
+
+    def _get_tainted_content_summary(self, syscall_args: List[Dict]) -> List[str]:
+        """Get a summary of tainted content from syscall arguments as separate lines."""
+        tainted_contents = []
+        
+        for i, arg in enumerate(syscall_args):
+            if TaintAnalyzer.has_taint_data(arg):
+                arg_type = arg.get('type', 'unknown')
+                
+                if arg_type == 'VPTR':
+                    string_content = arg.get('str', '')
+                    buf = arg.get('buf', [])
+                    if string_content:  # Only show if there's actual content
+                        if buf:
+                            actual_length = len(buf)
+                            content_summary = f'"{string_content}" (length: {actual_length} bytes)'
+                        else:
+                            content_summary = f'"{string_content}"'
+                        tainted_contents.append(content_summary)
+                
+                elif arg_type == 'IOVEC':
+                    vptrs = arg.get('vptrs', [])
+                    if vptrs:
+                        for j, vptr in enumerate(vptrs[:2]):  # Show first 2 iovec entries
+                            if TaintAnalyzer.has_taint_data(vptr):
+                                string_content = vptr.get('str', '')
+                                if string_content:
+                                    # Truncate long strings for display
+                                    if len(string_content) > 80:
+                                        truncated_content = string_content[:77] + "..."
+                                    else:
+                                        truncated_content = string_content
+                                    
+                                    buf = vptr.get('buf', [])
+                                    if buf:
+                                        actual_length = len(buf)
+                                        content_summary = f'"{truncated_content}" (length: {actual_length} bytes)'
+                                    else:
+                                        content_summary = f'"{truncated_content}"'
+                                    tainted_contents.append(f'iov[{j}]: {content_summary}')
+                        
+                        # If we have more than 2 entries, show a summary
+                        if len(vptrs) > 2:
+                            tainted_contents.append(f"... and {len(vptrs) - 2} more iovec entries")
+                
+                elif arg_type == 'PPCHAR':
+                    pchars = arg.get('pchars', [])
+                    if pchars:
+                        # Show first few non-null arguments
+                        argv_contents = []
+                        for j, pchar in enumerate(pchars[:3]):  # Show first 3
+                            if pchar.get('qword', 0) != 0:  # Not null
+                                argv_str = pchar.get('str', '')
+                                if argv_str:
+                                    argv_contents.append(f'argv[{j}]="{argv_str}"')
+                        
+                        if argv_contents:
+                            if len(pchars) > 3:
+                                argv_contents.append(f"... and {len(pchars) - 3} more")
+                            tainted_contents.append(f"[{', '.join(argv_contents)}]")
+                
+                elif arg_type in ['QWORD', 'DWORD', 'WORD', 'BYTE']:
+                    value_field = arg_type.lower()
+                    value = arg.get(value_field, 0)
+                    if value != 0:  # Only show non-zero values
+                        tainted_contents.append(f"{arg_type}: 0x{value:x}")
+        
+        return tainted_contents
+
     def select_syscall(self, tainted_calls: List[Dict]) -> Optional[Dict]:
         """Let user select a syscall."""
         while True:

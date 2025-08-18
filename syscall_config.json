@@ -119,5 +119,24 @@
             "false"
         ],
         "special_handling": false
+    },
+    "writev": {
+        "syscall_number": 20,
+        "valid_args": [
+            0,
+            1,
+            2
+        ],
+        "arg_names": [
+            "fd",
+            "iovec",
+            "count"
+        ],
+        "double_run": [
+            "false",
+            "true",
+            "false"
+        ],
+        "special_handling": false
     }
 }
