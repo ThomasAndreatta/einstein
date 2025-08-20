@@ -46,6 +46,8 @@ class SyscallConfig:
     
     def get_double_run_setting(self, syscall_name: str, arg_index: int, sub_arg_index: Optional[int] = None) -> bool:
         """Get double_run setting for a specific argument."""
+        print(f"Arg index: f{arg_index}")
+        
         config_info = self.get_syscall_info(syscall_name)
         if not config_info:
             return False  # Default to False if no config
@@ -646,7 +648,7 @@ class SyscallSelector:
                     nested_info = nested_args[arg_key]
                     content_info, size_info = ArgumentDisplay.format_argument_info(arg, i, nested_info['description'])
                     print(f"  {i+1}: {nested_info['description']} ({arg.get('type', 'unknown')}){content_info}{size_info} [TAINTED]")
-                    main_choices.append(i)
+                    main_choices.append(i+1)
         
         if not main_choices:
             print("No tainted arguments found!")
@@ -655,8 +657,9 @@ class SyscallSelector:
         # Select main argument
         while True:
             try:
-                main_choice = int(input(f"Select main argument from {main_choices}: ")) - 1
+                main_choice = int(input(f"Select main argument from {main_choices}: "))
                 if main_choice in main_choices:
+                    main_choice -=1
                     break
                 else:
                     print(f"Please select from: {main_choices}")
@@ -703,7 +706,7 @@ class SyscallSelector:
         # No sub-arguments, return main argument
         nested_info = nested_args.get(str(main_choice), {})
         self.selected_argument_name = nested_info.get('description', f"arg{main_choice}")
-        return (main_choice+1, None)  # Already 0-based
+        return (main_choice, None)  # Already 0-based
     
     def get_argument_info(self, syscall_args: List[Dict], arg_choice: Tuple[int, Optional[int]]) -> Tuple[int, int]:
         """Get address and size for the selected argument."""
@@ -742,7 +745,8 @@ class SyscallSelector:
         
         # Get double_run setting from configuration
         main_arg_index, sub_arg_index = arg_choice
-        double_run = self.config.get_double_run_setting(syscall_name, main_arg_index-1, sub_arg_index)
+        print(f"Main_arg: {main_arg_index}")
+        double_run = self.config.get_double_run_setting(syscall_name, main_arg_index, sub_arg_index)
         solve = not double_run  # solve = !double_run
         
         # Extract all addresses from taint_introduction_pc_backtrace

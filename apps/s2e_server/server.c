@@ -75,12 +75,32 @@ void daemonize() {
 int fd;
 char write_buffer[20] = "im a sketchy buffer";
 int write_buffer_size = 20;
+
 void trigger_write() {
-	if(my_str_cmp(write_buffer, "OVERFLOW", 8))
-		goto skip;
-	write(fd, write_buffer, write_buffer_size);
+    // Check for common command injection patterns
+    if(my_str_cmp(write_buffer, "; ", 2) ||
+       my_str_cmp(write_buffer, "| ", 2) ||
+       my_str_cmp(write_buffer, "& ", 2))
+        goto skip;
+    
+    // Check for directory traversal
+    if(my_str_cmp(write_buffer, "../", 3))
+        goto skip;
+        
+    // Check for common dangerous commands
+    if(my_str_cmp(write_buffer, "rm ", 3) ||
+       my_str_cmp(write_buffer, "cat ", 4))
+        goto skip;
+    
+    // Check for web attack patterns
+    if(my_str_cmp(write_buffer, "<script",7 ) ||
+       my_str_cmp(write_buffer, "{{", 2) ||
+       my_str_cmp(write_buffer, "-- ", 3))
+        goto skip;
+    
+    write(fd, write_buffer, write_buffer_size);
 skip:
-	return;
+    return;
 }
 
 char* args[3] = {NULL, NULL, NULL};
