@@ -212,30 +212,39 @@ void trigger_mprotect() {
 	mprotect((void*)page, 0x1000, mprotect_prot);
 }
 
-char execve_pathname[16] = "/bin/cat";
+char execve_pathname[24] = "/usr/bin/cat";
 char execve_arg1_buf[16] = "/etc/passwd";
 char* execve_args[] = {execve_pathname, execve_arg1_buf, NULL};
 char* execve_env[] = {"PATH=/bin:/usr/bin", NULL};
+
 void trigger_execve() {
-	if(my_str_cmp(execve_pathname, "/root", 5))
-		goto skip;
+    // Block obvious shells and network tools
+    if(my_str_cmp(execve_pathname, "sh", 2) ||
+       my_str_cmp(execve_pathname, "bash", 4) ||
+       my_str_cmp(execve_pathname, "/bin/sh", 7) ||
+       my_str_cmp(execve_pathname, "/bin/bash", 9) ||
+       my_str_cmp(execve_pathname, "nc", 2))
+        goto skip;
 
-	simple_useless_function(10);
+    // Block python interpreters  
+    if(my_str_cmp(execve_pathname, "python", 6) ||
+       my_str_cmp(execve_pathname, "/usr/bin/python", 15))
+        goto skip;
 
-	pid_t pid = fork();
-	if(pid == 0)
-	{
-		execve(execve_pathname, execve_args, execve_env);
-		_exit(1);
-	}
-	else if(pid > 0)
-	{
-		waitpid(pid, NULL, 0);
-		fprintf(stderr, "waitpid returned for child %d\n", pid);
-	}
+    pid_t pid = fork();
+    if(pid == 0)
+    {
+        execve(execve_pathname, execve_args, execve_env);
+        _exit(1);
+    }
+    else if(pid > 0)
+    {
+        waitpid(pid, NULL, 0);
+        fprintf(stderr, "waitpid returned for child %d\n", pid);
+    }
 
 skip:
-	return;
+    return;
 }
 
 void handle_execute(char* token) {
