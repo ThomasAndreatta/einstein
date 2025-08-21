@@ -53,6 +53,7 @@ void daemonize() {
 	if(pid > 0)
 	{
 		// Parent process exits
+        sleep(1);
 		exit(EXIT_SUCCESS);
 	}
 
@@ -165,23 +166,6 @@ void trigger_openat() {
 	printf("Openat completed\n");
 }
 
-void trigger_openat2() {
-
-	/* Part of the setup is in main */
-	char* buff = openat_path_buffer;
-
-	printf("Address of orig: %p, copy: %p\n", &openat_path_buffer, &buff);
-	fd = openat(dirfd, buff, openat_flags, openat_mode);
-	if(fd == -1)
-	{
-		perror("openat failed");
-		close(dirfd);
-		exit(EXIT_FAILURE);
-	}
-
-	printf("Openat completed\n");
-}
-
 int mprotect_prot = PROT_READ;
 #define BLOCK_RWX
 void trigger_mprotect() {
@@ -212,40 +196,34 @@ void trigger_mprotect() {
 	mprotect((void*)page, 0x1000, mprotect_prot);
 }
 
-char execve_pathname[24] = "/usr/bin/cat";
+char execve_pathname[16] = "/bin/cat/bin/c";
 char execve_arg1_buf[16] = "/etc/passwd";
 char* execve_args[] = {execve_pathname, execve_arg1_buf, NULL};
 char* execve_env[] = {"PATH=/bin:/usr/bin", NULL};
-
 void trigger_execve() {
-    // Block obvious shells and network tools
-    if(my_str_cmp(execve_pathname, "sh", 2) ||
-       my_str_cmp(execve_pathname, "bash", 4) ||
-       my_str_cmp(execve_pathname, "/bin/sh", 7) ||
-       my_str_cmp(execve_pathname, "/bin/bash", 9) ||
-       my_str_cmp(execve_pathname, "nc", 2))
-        goto skip;
+	if(my_str_cmp(execve_pathname, "/root", 5) ||
+        my_str_cmp(execve_pathname, "/home", 5) ||
+        my_str_cmp(execve_pathname, "/bin/nc", 7) )
+		goto skip;
 
-    // Block python interpreters  
-    if(my_str_cmp(execve_pathname, "python", 6) ||
-       my_str_cmp(execve_pathname, "/usr/bin/python", 15))
-        goto skip;
+	simple_useless_function(10);
 
-    pid_t pid = fork();
-    if(pid == 0)
-    {
-        execve(execve_pathname, execve_args, execve_env);
-        _exit(1);
-    }
-    else if(pid > 0)
-    {
-        waitpid(pid, NULL, 0);
-        fprintf(stderr, "waitpid returned for child %d\n", pid);
-    }
+	pid_t pid = fork();
+	if(pid == 0)
+	{
+		execve(execve_pathname, execve_args, execve_env);
+		_exit(1);
+	}
+	else if(pid > 0)
+	{
+		waitpid(pid, NULL, 0);
+		fprintf(stderr, "waitpid returned for child %d\n", pid);
+	}
 
 skip:
-    return;
+	return;
 }
+
 
 void handle_execute(char* token) {
 
@@ -453,5 +431,5 @@ int my_str_cmp(char* s1, char* s2, int s1_len) {
 			return 0;
 	}
 
-	return (s1[s2_len] == '\0' || s1_len == s2_len);
+	return 1;
 }
