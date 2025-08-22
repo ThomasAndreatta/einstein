@@ -83,7 +83,6 @@ bool syscall_covered(syscall_ctx_t *ctx)
 // PC Tracking
 // =====================================================================
 
-ADDRINT _einstein_last_taint_pc = 0;
 static string _einstein_last_recvfrom_backtrace = "";
 static std::string _einstein_taintall_file;
 bool _einstein_save_taint = true;
@@ -96,7 +95,7 @@ void einstein_init_taintall_file() {
     // Remove the file if it exists from a previous run
     unlink(_einstein_taintall_file.c_str());
     
-    EINSTEIN_LOG("Taintall trigger file: %s\n", _einstein_taintall_file.c_str());
+    // EINSTEIN_LOG("Taintall trigger file: %s\n", _einstein_taintall_file.c_str());
 }
 
 string get_syscall_param_addresses(syscall_ctx_t *ctx)
@@ -136,60 +135,11 @@ void einstein_check_taintall_file() {
 string bt_str_vanilla(CONTEXT *ctx, bool include_module_names, bool include_addresses)
 {
     // Get the original backtrace with PIN addresses
-    string original_bt = bt_str(ctx, include_module_names, include_addresses);
+    string backtrace = bt_str(ctx, include_module_names, include_addresses);
     
-    // Debug: print what we actually got
-    EINSTEIN_LOG("DEBUG: Original backtrace format:\n%s\n", original_bt.c_str());
+    // EINSTEIN_LOG("DEBUG: Original backtrace format:\n%s\n", backtrace.c_str());
     
-    // If addresses aren't included, return as-is
-    if (!include_addresses) {
-        return original_bt;
-    }
-
-    /* Used to do translation here but no more. */
-    return "SMTH went wrong!";
-}
-
-
-
-/* Deprecated.
- * Keeping it cause it has the check on IMG and might need it later
- * XXX remove later tho
- */
-string get_pin_offset_info(CONTEXT *ctx)
-{
-    string offset_info = "";
-    PIN_LockClient();
-    // Get current instruction pointer to find main executable
-    ADDRINT current_ip = PIN_GetContextReg(ctx, REG_INST_PTR);
-    IMG main_img = IMG_FindByAddress(current_ip);
-    
-    // Try to find main executable if current IP doesn't give us one
-    if (!IMG_Valid(main_img) || !IMG_IsMainExecutable(main_img)) {
-        // Look through all loaded images to find main executable
-        for (IMG img = APP_ImgHead(); IMG_Valid(img); img = IMG_Next(img)) {
-            if (IMG_IsMainExecutable(img)) {
-                main_img = img;
-                break;
-            }
-        }
-    }
-    
-    if (IMG_Valid(main_img) && IMG_IsMainExecutable(main_img)) {
-        ADDRINT pin_low = IMG_LowAddress(main_img);
-     
-        
-        char offset_buf[512];
-        snprintf(offset_buf, sizeof(offset_buf), 
-                "\"pin_base_address\": \"0x%lx\",", pin_low);
-        
-        offset_info = string(offset_buf);
-    } else {
-        offset_info = "\"pin_base_address\": \"0x0\",";
-    }
-    PIN_UnlockClient();
-    
-    return offset_info;
+    return backtrace;
 }
 
 
@@ -212,14 +162,11 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     if (bt_str(ctx->pinctx, true, true).find("libdbt-cmdsvr") != string::npos)
         return;
 
-    /*
-     * I feel like this should have some checks to check if PC is in IMG bound
-     * but ATM looks like its working(?)
-     */
+    
     if (_einstein_save_taint)
     {
             _einstein_last_recvfrom_backtrace = bt_str_vanilla(ctx->pinctx, true, false);
-            EINSTEIN_LOG("PC tracking triggered by taintall signal\n");
+            // EINSTEIN_LOG("PC tracking triggered by taintall signal\n");
     }
 
     // If we're in 'rewrite' mode, only check for this
@@ -232,7 +179,6 @@ void einstein_pre_syscall_hook(THREADID tid, syscall_ctx_t *ctx)
     // Add PC field
     string taint_pc_field = "\"taint_introduction_pc_backtrace\": [], ";
     
-    // if (!_einstein_save_taint && _einstein_last_recvfrom_backtrace != "")
     if (!_einstein_save_taint)
         taint_pc_field = "\"taint_introduction_pc_backtrace\": " + _einstein_last_recvfrom_backtrace + ", ";
         

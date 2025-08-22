@@ -14,21 +14,27 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+int my_str_cmp(char* s1, char* s2, int s1_len);
+void random_string_ops(char* s1, int len_s1);
+void simple_useless_function(int n);
+int simple_useless_function2();
+int simple_useless_function3(int val) ;
+
+// =============================================================================
+// CONSTANTS AND MACROS
+// =============================================================================
+
 // Default port (can be overridden with -p flag)
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
+
+#define BLOCK_MMAP
+#define BLOCK_RWX
 
 // Function to get current instruction pointer (PC)
 static inline void* get_pc() {
 	return __builtin_return_address(0);
 }
-
-void handle_client(int client_socket);
-int simple_useless_function3(int val);
-int simple_useless_function2();
-void simple_useless_function(int n);
-void random_string_ops(char* s1, int len_s1);
-int my_str_cmp(char* s1, char* s2, int s1_len);
 
 // Function to print current PC with context
 #define PRINT_PC(context)                                                      \
@@ -38,44 +44,45 @@ int my_str_cmp(char* s1, char* s2, int s1_len);
 		printf("[PC] %s: %p\n", context, pc);                                  \
 	} while(0)
 
-// Global variables for cleanup
+// =============================================================================
+// GLOBAL VARIABLES
+// =============================================================================
+
 int tcp_fd = -1;
-
-void daemonize() {
-	pid_t pid = fork();
-
-	if(pid < 0)
-	{
-		perror("fork failed");
-		exit(EXIT_FAILURE);
-	}
-
-	if(pid > 0)
-	{
-		// Parent process exits
-        sleep(1);
-		exit(EXIT_SUCCESS);
-	}
-
-	// Child continues as daemon
-	if(setsid() < 0)
-	{
-		perror("setsid failed");
-		exit(EXIT_FAILURE);
-	}
-
-	// Change working directory to root
-	chdir("/");
-
-	// Close file descriptors
-	close(STDIN_FILENO);
-	close(STDOUT_FILENO);
-	close(STDERR_FILENO);
-}
 
 int fd;
 char write_buffer[20] = "im a sketchy buffer";
 int write_buffer_size = 20;
+
+char* args[3] = {NULL, NULL, NULL};
+
+volatile uid_t euid = 1024;
+
+char creat_filename[19] = "/tmp/test_file.txt";
+mode_t creat_mode = S_IRUSR;
+
+void* mmap_addr = NULL;
+size_t mmap_length = 4096;
+int mmap_prot = PROT_READ;
+int mmap_flags = MAP_PRIVATE;
+int mmap_fd;
+off_t mmap_offset = 0;
+
+char openat_path_buffer[25] = "very_very_safe_file.txt";
+int openat_flags = O_CREAT;
+mode_t openat_mode = 0644;
+int dirfd;
+
+int mprotect_prot = PROT_READ;
+
+char execve_pathname[16] = "/bin/cat/bin/c";
+char execve_arg1_buf[16] = "/etc/passwd";
+char* execve_args[] = {execve_pathname, execve_arg1_buf, NULL};
+char* execve_env[] = {"PATH=/bin:/usr/bin", NULL};
+
+// =============================================================================
+// SYSTEM CALL TRIGGER FUNCTIONS
+// =============================================================================
 
 void trigger_write() {
     // Check for common command injection patterns
@@ -104,13 +111,6 @@ skip:
     return;
 }
 
-char* args[3] = {NULL, NULL, NULL};
-
-volatile uid_t euid = 1024;
-
-char creat_filename[19] = "/tmp/test_file.txt";
-mode_t creat_mode = S_IRUSR;
-
 void trigger_creat() {
 	// PRINT_PC("trigger_creat");
 
@@ -124,13 +124,6 @@ skip:
 	fd = 0;
 }
 
-void* mmap_addr = NULL;
-size_t mmap_length = 4096;
-int mmap_prot = PROT_READ;
-int mmap_flags = MAP_PRIVATE;
-int mmap_fd;
-off_t mmap_offset = 0;
-#define BLOCK_MMAP
 void trigger_mmap() {
 	PRINT_PC("trigger_mmap");
 	simple_useless_function(mmap_length);
@@ -146,13 +139,7 @@ void trigger_mmap() {
 	mmap(mmap_addr, mmap_length, mmap_prot, mmap_flags, mmap_fd, mmap_offset);
 }
 
-
-char openat_path_buffer[25] = "very_very_safe_file.txt";
-int openat_flags = O_CREAT;
-mode_t openat_mode = 0644;
-int dirfd;
 void trigger_openat() {
-
 	/* Part of the setup is in main */
 
 	fd = openat(dirfd, openat_path_buffer, openat_flags, openat_mode);
@@ -166,8 +153,6 @@ void trigger_openat() {
 	printf("Openat completed\n");
 }
 
-int mprotect_prot = PROT_READ;
-#define BLOCK_RWX
 void trigger_mprotect() {
 	void* page =
 		mmap(NULL, 0x1000, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -196,10 +181,6 @@ void trigger_mprotect() {
 	mprotect((void*)page, 0x1000, mprotect_prot);
 }
 
-char execve_pathname[16] = "/bin/cat/bin/c";
-char execve_arg1_buf[16] = "/etc/passwd";
-char* execve_args[] = {execve_pathname, execve_arg1_buf, NULL};
-char* execve_env[] = {"PATH=/bin:/usr/bin", NULL};
 void trigger_execve() {
 	if(my_str_cmp(execve_pathname, "/root", 5) ||
         my_str_cmp(execve_pathname, "/home", 5) ||
@@ -224,9 +205,11 @@ skip:
 	return;
 }
 
+// =============================================================================
+// REQUEST HANDLING FUNCTIONS
+// =============================================================================
 
 void handle_execute(char* token) {
-
 	if(strcmp(token, "creat") == 0)
 		trigger_creat();
 	else if(strcmp(token, "mmap") == 0)
@@ -271,15 +254,54 @@ void handle_client(int client_socket) {
 	}
 }
 
-int main(int argc, char** argv) {
+// =============================================================================
+// DAEMON PROCESS FUNCTIONS
+// =============================================================================
 
+void daemonize() {
+	pid_t pid = fork();
+
+	if(pid < 0)
+	{
+		perror("fork failed");
+		exit(EXIT_FAILURE);
+	}
+
+	if(pid > 0)
+	{
+		// Parent process exits
+        sleep(1);
+		exit(EXIT_SUCCESS);
+	}
+
+	// Child continues as daemon
+	if(setsid() < 0)
+	{
+		perror("setsid failed");
+		exit(EXIT_FAILURE);
+	}
+
+	// Change working directory to root
+	chdir("/");
+
+	// Close file descriptors
+	close(STDIN_FILENO);
+	close(STDOUT_FILENO);
+	close(STDERR_FILENO);
+}
+
+
+// =============================================================================
+// MAIN FUNCTION
+// =============================================================================
+
+int main(int argc, char** argv) {
 	// PRINT_PC("main entry");
 	mmap_fd = open("/tmp/mmap_test", O_RDWR | O_CREAT, 0644);
 
 	struct sockaddr_in tcp_addr;
 	int addrlen = sizeof(tcp_addr);
 	int port = DEFAULT_PORT;
-
 	int daemon_mode = 0;
 
 	// Parse arguments
@@ -295,6 +317,7 @@ int main(int argc, char** argv) {
 		}
 	}
 
+	// Create TCP socket
 	if((tcp_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
 	{
 		perror("TCP socket creation failed");
@@ -317,13 +340,16 @@ int main(int argc, char** argv) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Configure socket options
 	int sock_opt = 1;
 	setsockopt(tcp_fd, SOL_SOCKET, SO_REUSEADDR, &sock_opt, sizeof(sock_opt));
 
+	// Configure address
 	tcp_addr.sin_family = AF_INET;
 	tcp_addr.sin_addr.s_addr = INADDR_ANY;
 	tcp_addr.sin_port = htons(port);
 
+	// Bind socket
 	if(bind(tcp_fd, (struct sockaddr*)&tcp_addr, sizeof(tcp_addr)) < 0)
 	{
 		perror("TCP bind failed");
@@ -331,6 +357,7 @@ int main(int argc, char** argv) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Listen for connections
 	if(listen(tcp_fd, 5) < 0)
 	{
 		perror("TCP listen failed");
@@ -338,14 +365,17 @@ int main(int argc, char** argv) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Setup file descriptor sets for select
 	fd_set master_fds, read_fds;
 	FD_ZERO(&master_fds);
 	FD_SET(tcp_fd, &master_fds);
 
+    // Daemonize if requested
     if (daemon_mode) {
         daemonize();
     }
 
+	// Main server loop
 	while(1)
 	{
 		read_fds = master_fds;
@@ -376,6 +406,10 @@ int main(int argc, char** argv) {
 
 	return 0;
 }
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
 
 int simple_useless_function3(int val) {
 	int y = val;

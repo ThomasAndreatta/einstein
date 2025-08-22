@@ -13,14 +13,12 @@ from typing import Dict, List, Optional, Tuple, Union
 
 
 class SyscallConfig:
-    """Handles syscall configuration loading and validation."""
     
     def __init__(self, config_file: str = "syscall_config.json"):
         self.config = {}
         self.load_config(config_file)
     
     def load_config(self, config_file: str):
-        """Load syscall configuration from JSON file."""
         try:
             with open(config_file, 'r') as f:
                 self.config = json.load(f)
@@ -33,19 +31,15 @@ class SyscallConfig:
             sys.exit(1)
     
     def get_syscall_info(self, syscall_name: str) -> Optional[Dict]:
-        """Get configuration info for a syscall."""
         return self.config.get(syscall_name)
     
     def is_supported(self, syscall_name: str) -> bool:
-        """Check if syscall is supported in configuration."""
         return syscall_name in self.config
     
     def get_supported_syscalls(self) -> List[str]:
-        """Get list of supported syscall names."""
         return list(self.config.keys())
     
     def get_double_run_setting(self, syscall_name: str, arg_index: int, sub_arg_index: Optional[int] = None) -> bool:
-        """Get double_run setting for a specific argument."""
         print(f"Arg index: f{arg_index}")
         
         config_info = self.get_syscall_info(syscall_name)
@@ -79,19 +73,16 @@ class SyscallConfig:
         if isinstance(single_double_run, bool):
             return single_double_run
         
-        return False  # Default to False
+        return False
 
 
 class TaintAnalyzer:
-    """Handles taint analysis and argument inspection."""
     
     @staticmethod
     def has_taint_data(arg: Dict) -> bool:
-        """Check if an argument has any taint data."""
         arg_type = arg.get('type', 'unknown')
         
         def has_valid_taint_entries(taint_data):
-            """Helper function to check if taint data has valid entries."""
             if not taint_data:
                 return False
             
@@ -157,21 +148,17 @@ class TaintAnalyzer:
 
     @staticmethod
     def get_taint_address(arg: Dict) -> Optional[int]:
-        """Extract the taint address from an argument."""
         arg_type = arg.get('type', 'unknown')
         
         def find_valid_address_in_taint(taint_data):
-            """Helper function to find first valid numeric address in taint data."""
             if not taint_data:
                 return None
             
             for taint_entry in taint_data:
                 if isinstance(taint_entry, list) and len(taint_entry) > 0:
-                    # Found a list with addresses
                     if isinstance(taint_entry[0], int):
                         return taint_entry[0]
                 elif isinstance(taint_entry, int):
-                    # Direct integer value
                     return taint_entry
             
             return None
@@ -228,7 +215,6 @@ class TaintAnalyzer:
         return 0
     @staticmethod
     def get_argument_size(arg: Dict) -> int:
-        """Calculate the actual size of an argument."""
         arg_type = arg.get('type', 'unknown')
         
         if arg_type == 'VPTR':
@@ -253,14 +239,13 @@ class TaintAnalyzer:
             'DWORD': 4, 
             'WORD': 2,
             'BYTE': 1,
-            'PPCHAR': 8  # Pointer size
+            'PPCHAR': 8
         }
         
-        return size_map.get(arg_type, 8)  # Default to 8 bytes
+        return size_map.get(arg_type, 8)
 
 
 class BacktraceAnalyzer:
-    """Handles backtrace analysis and PC extraction."""
     
     LIBRARY_INDICATORS = [
         '/lib64/', '/lib/x86_64-linux-gnu/', '/lib/i386-linux-gnu/',
@@ -269,27 +254,24 @@ class BacktraceAnalyzer:
     
     @staticmethod
     def is_library_path(backtrace_entry: str) -> bool:
-        """Check if a backtrace entry is from a library."""
         return any(indicator in backtrace_entry for indicator in BacktraceAnalyzer.LIBRARY_INDICATORS)
     
     @staticmethod
     def extract_address_from_backtrace(backtrace_entry: str) -> Optional[str]:
-        """Extract hex address from backtrace entry."""
         # Look for pattern like "server+0x7fff00102f74" after " at "
         match = re.search(r' at [^+]+\+0x([0-9a-fA-F]+)', backtrace_entry)
         if match:
-            return match.group(1).lower()  # Return lowercase for consistency
+            return match.group(1).lower()
         
         # Fallback: look for the last hex address pattern
         matches = re.findall(r'\+0x([0-9a-fA-F]+)', backtrace_entry)
         if matches:
-            return matches[-1].lower()  # Return lowercase for consistency
+            return matches[-1].lower()
         
         return None
     
     @staticmethod
     def get_pc_from_backtrace(backtrace: List[str]) -> Optional[str]:
-        """Get PC from backtrace (first non-library entry)."""
         if not backtrace:
             return None
         
@@ -310,11 +292,9 @@ class BacktraceAnalyzer:
 
 
 class ArgumentDisplay:
-    """Handles argument display formatting."""
     
     @staticmethod
     def format_argument_info(arg: Dict, arg_index: int, arg_name: str) -> Tuple[str, str]:
-        """Format argument information for display."""
         arg_type = arg.get('type', 'unknown')
         
         if arg_type == 'VPTR':
@@ -372,7 +352,6 @@ class ArgumentDisplay:
         return content_info, size_info
 
 class SyscallSelector:
-    """Main class for syscall selection and configuration generation."""
     
     def __init__(self, config_file: str = "syscall_config.json"):
         self.config = SyscallConfig(config_file)
@@ -382,7 +361,6 @@ class SyscallSelector:
         self.selected_sub_arg_index = None
     
     def load_trace_data(self, filename: str) -> List[Dict]:
-        """Load syscall trace data from JSON file."""
         try:
             with open(filename, 'r') as f:
                 return json.load(f)
@@ -394,7 +372,6 @@ class SyscallSelector:
             sys.exit(1)
     
     def filter_tainted_syscalls(self, data: List[Dict]) -> List[Dict]:
-        """Filter syscalls to only include tainted ones that are in config."""
         tainted_calls = []
         seen_signatures = set()
         skipped_count = 0
@@ -424,7 +401,6 @@ class SyscallSelector:
         return tainted_calls
         
     def display_tainted_syscalls(self, tainted_calls: List[Dict]):
-        """Display available tainted syscalls."""
         if not tainted_calls:
             print("\nNo tainted syscalls found in configuration.")
             print(f"Supported syscalls: {self.config.get_supported_syscalls()}")
@@ -458,7 +434,6 @@ class SyscallSelector:
             print()
 
     def _get_tainted_content_summary(self, syscall_args: List[Dict]) -> List[str]:
-        """Get a summary of tainted content from syscall arguments as separate lines."""
         tainted_contents = []
         
         for i, arg in enumerate(syscall_args):
@@ -504,10 +479,9 @@ class SyscallSelector:
                 elif arg_type == 'PPCHAR':
                     pchars = arg.get('pchars', [])
                     if pchars:
-                        # Show first few non-null arguments
                         argv_contents = []
-                        for j, pchar in enumerate(pchars[:3]):  # Show first 3
-                            if pchar.get('qword', 0) != 0:  # Not null
+                        for j, pchar in enumerate(pchars[:3]):
+                            if pchar.get('qword', 0) != 0:
                                 argv_str = pchar.get('str', '')
                                 if argv_str:
                                     argv_contents.append(f'argv[{j}]="{argv_str}"')
@@ -526,7 +500,6 @@ class SyscallSelector:
         return tainted_contents
 
     def select_syscall(self, tainted_calls: List[Dict]) -> Optional[Dict]:
-        """Let user select a syscall."""
         while True:
             try:
                 choice = int(input(f"Select a tainted syscall (1-{len(tainted_calls)}): "))
@@ -538,7 +511,6 @@ class SyscallSelector:
                 print("Please enter a valid number")
     
     def select_argument(self, syscall_call: Dict) -> Optional[Tuple[int, Optional[int]]]:
-        """Select argument for the syscall. Returns (arg_index, sub_arg_index)."""
         syscall_name = syscall_call.get('syscall', 'unknown')
         syscall_args = syscall_call.get('syscall_args', [])
         config_info = self.config.get_syscall_info(syscall_name)
@@ -553,14 +525,12 @@ class SyscallSelector:
         else:
             result = self._select_regular_argument(syscall_args, config_info)
         
-        # Store the selected indices for later use
         if result:
             self.selected_arg_index, self.selected_sub_arg_index = result
         
         return result
     
     def _select_generic_argument(self, syscall_args: List[Dict]) -> Optional[Tuple[int, None]]:
-        """Select argument for unsupported syscalls."""
         tainted_choices = []
         
         print("Available tainted arguments:")
@@ -585,7 +555,6 @@ class SyscallSelector:
                 print("Please enter a valid number")
     
     def _select_regular_argument(self, syscall_args: List[Dict], config_info: Dict) -> Optional[Tuple[int, None]]:
-        """Select argument for regular syscalls."""
         valid_args = config_info.get('valid_args', [])
         arg_names = config_info.get('arg_names', [])
         
@@ -596,10 +565,8 @@ class SyscallSelector:
         
         # Check each valid argument - determine if config uses 0-based or 1-based indexing
         for i, arg_index in enumerate(valid_args):
-            # Try both 0-based and 1-based indexing
             actual_index = arg_index
             if arg_index >= len(syscall_args) and arg_index > 0:
-                # Config might be 1-based, convert to 0-based
                 actual_index = arg_index - 1
             
             if actual_index < len(syscall_args):
@@ -627,14 +594,13 @@ class SyscallSelector:
                         if actual_index == choice:
                             self.selected_argument_name = arg_names[i] if i < len(arg_names) else f"arg{choice}"
                             break
-                    return (choice, None)  # Return the actual 0-based index
+                    return (choice, None)
                 else:
                     print(f"Please select from: {tainted_choices}")
             except ValueError:
                 print("Please enter a valid number")
     
     def _select_execve_argument(self, syscall_args: List[Dict], config_info: Dict) -> Optional[Tuple[int, Optional[int]]]:
-        """Handle execve special case with nested arguments."""
         nested_args = config_info.get('nested_args', {})
         
         print(f"\nExecutve Arguments:")
@@ -643,7 +609,7 @@ class SyscallSelector:
         # Show main arguments that have taint data
         for i, arg in enumerate(syscall_args):
             if TaintAnalyzer.has_taint_data(arg):
-                arg_key = str(i)  # Config uses 0-based indexing
+                arg_key = str(i)
                 if arg_key in nested_args:
                     nested_info = nested_args[arg_key]
                     content_info, size_info = ArgumentDisplay.format_argument_info(arg, i, nested_info['description'])
@@ -654,7 +620,6 @@ class SyscallSelector:
             print("No tainted arguments found!")
             return None
         
-        # Select main argument
         while True:
             try:
                 main_choice = int(input(f"Select main argument from {main_choices}: "))
@@ -667,7 +632,7 @@ class SyscallSelector:
                 print("Please enter a valid number")
         
         # Check for sub-arguments
-        main_arg = syscall_args[main_choice]  # Already 0-based
+        main_arg = syscall_args[main_choice]
         if (str(main_choice) in nested_args and 
             main_arg.get('type') == 'PPCHAR' and 
             'pchars' in main_arg):
@@ -706,10 +671,9 @@ class SyscallSelector:
         # No sub-arguments, return main argument
         nested_info = nested_args.get(str(main_choice), {})
         self.selected_argument_name = nested_info.get('description', f"arg{main_choice}")
-        return (main_choice, None)  # Already 0-based
+        return (main_choice, None)
     
     def get_argument_info(self, syscall_args: List[Dict], arg_choice: Tuple[int, Optional[int]]) -> Tuple[int, int]:
-        """Get address and size for the selected argument."""
         main_arg_index, sub_arg_index = arg_choice
         
         # Handle nested arguments (like execve argv[N])
@@ -738,7 +702,6 @@ class SyscallSelector:
         return 0, 0
         
     def generate_config(self, syscall_call: Dict, arg_choice: Tuple[int, Optional[int]]) -> str:
-        """Generate S2E configuration."""
         syscall_name = syscall_call.get('syscall', 'unknown')
         config_info = self.config.get_syscall_info(syscall_name)
         syscall_number = config_info.get('syscall_number', 'unknown') if config_info else 'unknown'
@@ -818,7 +781,6 @@ class SyscallSelector:
 
     def save_config(self, config_output: str, binary_name: str, template_file: str = "s2e-config.template.lua", 
                     output_file: str = "s2e-config.lua"):
-        """Save configuration to file."""
         try:
             with open(template_file, 'r') as tf:
                 template_content = tf.read()
@@ -848,8 +810,6 @@ class SyscallSelector:
             print(f"Error writing to output file {output_file}: {e}")
     
     def run(self, trace_file: str, binary_name: str):
-        """Main execution flow."""
-        # Load and filter data
         data = self.load_trace_data(trace_file)
         tainted_calls = self.filter_tainted_syscalls(data)
         
@@ -857,7 +817,6 @@ class SyscallSelector:
             print("No tainted syscalls found in configuration.")
             return
         
-        # Display and select
         self.display_tainted_syscalls(tainted_calls)
         selected_call = self.select_syscall(tainted_calls)
         
@@ -876,7 +835,6 @@ class SyscallSelector:
 
 
 def main():
-   """Main entry point."""
    if len(sys.argv) < 3 or len(sys.argv) > 4:
        print("Usage: python syscall_selector.py <binary_name> <trace_file> [config_file]")
        print("  binary_name: Name of the binary to replace name_placeholder")
