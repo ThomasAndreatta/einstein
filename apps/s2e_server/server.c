@@ -198,7 +198,6 @@ void trigger_execve() {
 	else if(pid > 0)
 	{
 		waitpid(pid, NULL, 0);
-		fprintf(stderr, "waitpid returned for child %d\n", pid);
 	}
 
 skip:

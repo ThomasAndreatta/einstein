@@ -19,9 +19,9 @@ for TEST in "${tests[@]}"
 do
     TEST_NO_SLASHES=$(echo ${TEST} | sed 's/\//_/g')
     echo "Running test ${TEST} (${TEST_NO_SLASHES})..."
-    RUN_EINSTEIN=1 USE_LOG_DIR=1 V=1 LOG_SUB_DIR="${TEST_NO_SLASHES}" ./serverctl restart
+    RUN_EINSTEIN=1 USE_LOG_DIR=1 V=1 LOG_SUB_DIR="${TEST_NO_SLASHES}" ./serverctl restart &> /dev/null
     sleep 8
-    ./serverctl udscmd pids dbt taintall
+    ./serverctl udscmd pids dbt taintall &> /dev/null
     sleep 2
     bash tests/${TEST}
 done

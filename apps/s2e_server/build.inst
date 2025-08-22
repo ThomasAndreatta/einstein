@@ -9,14 +9,14 @@ MYPWD=`pwd`
 PROG=server
 OUTPUT=install/bin/${PROG}
 
-make clean
-mkdir -p install/bin
-make
+make clean > /dev/null
+mkdir -p install/bin > /dev/null
+make > /dev/null
 
-mkdir -p /tmp/data
+mkdir -p /tmp/data > /dev/null
 
 if [ $HAVE_LIBDFT -eq 1 ]; then
-    ${LIBDFT}/utils/relink.py ${OUTPUT}
+    ${LIBDFT}/utils/relink.py ${OUTPUT}  > /dev/null
 fi
 
 echo "Build completed successfully"

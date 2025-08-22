@@ -429,7 +429,7 @@ tasks:
   #### s2e_server-app
   s2e_server-build:         {cmds: [task app-build       -- s2e_server]}
   s2e_server-test:          {cmds: [task app-test        -- s2e_server]}
-  s2e_server-eval:          {cmds: [task app-eval        -- s2e_server, task db-add-reports db-analyze-reports db-print-candidates ]}
+  s2e_server-eval:          {silent: true, cmds: [task app-eval        -- s2e_server, task db-add-reports db-analyze-reports db-print-candidates ]}
 
   ################################
   #### Einste-S2E Artifact
@@ -453,19 +453,19 @@ tasks:
   experiment1:
     desc: Run experiment 1 (mmap) of artifact evaluation
     cmds:
-      - echo -e "3\n2" | task selector -- reproducer
+      - echo -e "3\n2" | task selector -- reproducer &> /dev/null
   experiment2:
     desc: Run experiment 2 (execve) of artifact evaluation
     cmds:
-      - echo -e "2\n1" | task selector -- reproducer
+      - echo -e "2\n1" | task selector -- reproducer &> /dev/null
   experiment3:
     desc: Run experiment 3 (mprotect) of artifact evaluation
     cmds:
-      - echo -e "4\n2" | task selector -- reproducer
+      - echo -e "4\n2" | task selector -- reproducer &> /dev/null
   experiment4:
     desc: Run experiment 4 (write) of artifact evaluation
     cmds:
-      - echo -e "6\n1" | task selector -- reproducer
+      - echo -e "6\n1" | task selector -- reproducer &> /dev/null
 
   ################################
   #### All apps
