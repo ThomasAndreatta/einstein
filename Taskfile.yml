@@ -453,19 +453,32 @@ tasks:
   experiment1:
     desc: Run experiment 1 (mmap) of artifact evaluation
     cmds:
-      - echo -e "3\n2" | task selector -- reproducer &> /dev/null
+      - echo -e "4\n2" | task selector -- reproducer &> /dev/null
   experiment2:
     desc: Run experiment 2 (execve) of artifact evaluation
     cmds:
-      - echo -e "2\n1" | task selector -- reproducer &> /dev/null
+      - echo -e "3\n1" | task selector -- reproducer &> /dev/null
   experiment3:
     desc: Run experiment 3 (mprotect) of artifact evaluation
     cmds:
-      - echo -e "4\n2" | task selector -- reproducer &> /dev/null
+      - echo -e "5\n2" | task selector -- reproducer &> /dev/null
   experiment4:
     desc: Run experiment 4 (write) of artifact evaluation
     cmds:
+      - echo -e "7\n1" | task selector -- reproducer &> /dev/null
+  experiment5:
+    desc: Run experiment 5 (openat) of artifact evaluation
+    cmds:
       - echo -e "6\n1" | task selector -- reproducer &> /dev/null
+  experiment6:
+    desc: Run experiment 6 (creat) of artifact evaluation
+    cmds:
+      - echo -e "2\n0" | task selector -- reproducer &> /dev/null
+
+  experiment7:
+    desc: Run experiment 7 (bind) of artifact evaluation
+    cmds:
+      - echo -e "1\n1" | task selector -- reproducer &> /dev/null
 
   ################################
   #### All apps

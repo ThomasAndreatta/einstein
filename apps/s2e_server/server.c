@@ -13,6 +13,9 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <sys/uio.h>
+#include <arpa/inet.h>
+
 
 int my_str_cmp(char* s1, char* s2, int s1_len);
 void random_string_ops(char* s1, int len_s1);
@@ -56,8 +59,6 @@ int write_buffer_size = 20;
 
 char* args[3] = {NULL, NULL, NULL};
 
-volatile uid_t euid = 1024;
-
 char creat_filename[19] = "/tmp/test_file.txt";
 mode_t creat_mode = S_IRUSR;
 
@@ -80,9 +81,97 @@ char execve_arg1_buf[16] = "/etc/passwd";
 char* execve_args[] = {execve_pathname, execve_arg1_buf, NULL};
 char* execve_env[] = {"PATH=/bin:/usr/bin", NULL};
 
+struct iovec writev_iov[2];
+char writev_buf1[16] = "safe_buffer_1";
+char writev_buf2[16] = "safe_buffer_2";
+int writev_iovcnt = 2;
+
+// pwrite globals
+char pwrite_buffer[20] = "pwrite_safe_data";
+size_t pwrite_count = 16;
+off_t pwrite_offset = 0;
+
+// bind globals
+struct sockaddr_in bind_addr;
+int bind_sockfd;
+int bind_port = 9999;
+
+// connect globals
+struct sockaddr_in connect_addr;
+int connect_sockfd;
+char connect_host[16] = "127.0.0.1";
+int connect_port = 8888;
+
+int euid = 1024;
 // =============================================================================
 // SYSTEM CALL TRIGGER FUNCTIONS
 // =============================================================================
+
+
+void trigger_writev() {
+    // Simple check for suspicious content
+   
+    
+    // Setup iovec structure
+    writev_iov[0].iov_base = writev_buf1;
+    writev_iov[0].iov_len = strlen(writev_buf1);
+    writev_iov[1].iov_base = writev_buf2;
+    writev_iov[1].iov_len = strlen(writev_buf2);
+    
+     if(my_str_cmp(writev_iov[0].iov_base, "overflow", 8) ||
+       my_str_cmp(writev_iov[0].iov_base, "'", 1))
+        goto skip;
+
+    PRINT_PC("Triggering WRITEV");
+    writev(fd, writev_iov, writev_iovcnt);
+    
+skip:
+    return;
+}
+
+void trigger_pwrite() {
+    // Check for dangerous patterns
+    if(my_str_cmp(pwrite_buffer, "#!/", 3) ||
+       my_str_cmp(pwrite_buffer, "cat ", 4) ||
+       my_str_cmp(pwrite_buffer, "nc ", 3))
+        goto skip;
+    
+    // Don't write to negative offsets
+    if(pwrite_offset < 0)
+        goto skip;
+    
+    PRINT_PC("Triggering PWRITE");
+    pwrite(fd, pwrite_buffer, pwrite_count, pwrite_offset);
+    
+skip:
+    return;
+}
+
+void trigger_bind() {  
+    
+    // Create socket if needed
+    bind_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(bind_sockfd < 0)
+        goto skip;
+    
+    // Setup address
+    bind_addr.sin_family = AF_INET;
+    bind_addr.sin_addr.s_addr = INADDR_ANY;
+    bind_addr.sin_port = htons(bind_port);
+
+    if(bind_addr.sin_port < 1024)
+        goto skip;
+
+    if(bind_addr.sin_port >= 6120 && bind_addr.sin_port <= 6200)
+        goto skip;
+    
+    PRINT_PC("Triggering BIND");
+    bind(bind_sockfd, (struct sockaddr*)&bind_addr, sizeof(bind_addr));
+    close(bind_sockfd);
+    
+skip:
+    return;
+}
 
 void trigger_write() {
     // Check for common command injection patterns
@@ -142,6 +231,19 @@ void trigger_mmap() {
 void trigger_openat() {
 	/* Part of the setup is in main */
 
+	// Block access to root directory
+	if(my_str_cmp(openat_path_buffer, "/root/", 6))
+		goto skip;
+	
+    if(my_str_cmp(openat_path_buffer, "/bin", 4))
+		goto skip;
+	
+	// Block directory traversal attacks
+	if(my_str_cmp(openat_path_buffer, "../", 3))
+		goto skip;
+
+
+	PRINT_PC("Triggering OPENAT");
 	fd = openat(dirfd, openat_path_buffer, openat_flags, openat_mode);
 	if(fd == -1)
 	{
@@ -151,6 +253,11 @@ void trigger_openat() {
 	}
 
 	printf("Openat completed\n");
+	return;
+
+skip:
+	printf("Openat blocked for security\n");
+	fd = -1;
 }
 
 void trigger_mprotect() {
@@ -211,16 +318,20 @@ skip:
 void handle_execute(char* token) {
 	if(strcmp(token, "creat") == 0)
 		trigger_creat();
-	else if(strcmp(token, "mmap") == 0)
+	else if(strcmp(token, "mmap") == 0) /* good */
 		trigger_mmap();
-	else if(strcmp(token, "openat") == 0)
+	else if(strcmp(token, "openat") == 0) /* to test */
 		trigger_openat();
-	else if(strcmp(token, "mprotect") == 0)
+	else if(strcmp(token, "mprotect") == 0) /* good */
 		trigger_mprotect();
-	else if(strcmp(token, "execve") == 0)
+	else if(strcmp(token, "execve") == 0) /* good */
 		trigger_execve();
-	else if(strcmp(token, "write") == 0)
+	else if(strcmp(token, "write") == 0) /* good */
 		trigger_write();
+	else if(strcmp(token, "writev") == 0) /* to test */
+		trigger_writev();
+	else if(strcmp(token, "bind") == 0)
+		trigger_bind();
 	else if(strcmp(token, "test") == 0)
 		trigger_mmap();
 }

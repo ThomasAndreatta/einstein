@@ -101,6 +101,19 @@
         ],
         "special_handling": false
     },
+    "setresuid": {
+        "syscall_number": 117,
+        "valid_args": [
+            1
+        ],
+        "arg_names": [
+            "euid"
+        ],
+        "double_run": [
+            "false"
+        ],
+        "special_handling": false
+    },
     "write": {
         "syscall_number": 1,
         "valid_args": [
@@ -120,21 +133,15 @@
         ],
         "special_handling": false
     },
-    "writev": {
-        "syscall_number": 20,
+    "bind": {
+        "syscall_number": 49,
         "valid_args": [
-            0,
-            1,
-            2
+            1
         ],
         "arg_names": [
-            "fd",
-            "iovec",
-            "count"
+            "addr"
         ],
         "double_run": [
-            "false",
-            "true",
             "false"
         ],
         "special_handling": false

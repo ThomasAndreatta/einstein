@@ -40,7 +40,6 @@ class SyscallConfig:
         return list(self.config.keys())
     
     def get_double_run_setting(self, syscall_name: str, arg_index: int, sub_arg_index: Optional[int] = None) -> bool:
-        print(f"Arg index: f{arg_index}")
         
         config_info = self.get_syscall_info(syscall_name)
         if not config_info:

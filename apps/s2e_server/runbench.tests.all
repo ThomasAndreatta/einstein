@@ -4,3 +4,5 @@ openat
 mprotect
 execve
 write
+bind
+setresuid
