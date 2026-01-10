@@ -5,4 +5,3 @@ mprotect
 execve
 write
 bind
-setresuid
